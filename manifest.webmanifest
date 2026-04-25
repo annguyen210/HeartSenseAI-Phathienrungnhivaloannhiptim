@@ -1,0 +1,75 @@
+{
+  "name": "HeartSense - Theo dõi tim thông minh",
+  "short_name": "HeartSense",
+  "description": "Multi-platform heart health monitoring with AI detection, Face PPG, Breathing Coach, SOS emergency alerts, and comprehensive health reports.",
+  "start_url": "./",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#dc2626",
+  "lang": "vi",
+  "prefer_related_applications": false,
+  "categories": ["health", "medical"],
+  "screenshots": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 540 720'><rect fill='%23dc2626' width='540' height='720'/><text x='270' y='360' font-size='120' fill='%23fff' text-anchor='middle' dy='.3em'>❤️</text></svg>",
+      "sizes": "540x720",
+      "type": "image/svg+xml",
+      "form_factor": "narrow"
+    }
+  ],
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23dc2626' width='192' height='192'/><text x='96' y='96' font-size='140' fill='%23fff' text-anchor='middle' dy='.35em'>❤️</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23dc2626' width='192' height='192' rx='44'/><text x='96' y='96' font-size='140' fill='%23fff' text-anchor='middle' dy='.35em'>❤️</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Đo Khuôn Mặt",
+      "short_name": "Đo",
+      "description": "Bắt đầu đo nhịp tim bằng khuôn mặt",
+      "url": "/?action=measure",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%23dc2626' width='96' height='96'/><text x='48' y='48' font-size='70' fill='%23fff' text-anchor='middle' dy='.35em'>🟢</text></svg>",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "Huấn Luyện Thở",
+      "short_name": "Thở",
+      "description": "Bắt đầu huấn luyện thở",
+      "url": "/?action=breathing",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%2310b981' width='96' height='96'/><text x='48' y='48' font-size='70' fill='%23fff' text-anchor='middle' dy='.35em'>🧘</text></svg>",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}
+

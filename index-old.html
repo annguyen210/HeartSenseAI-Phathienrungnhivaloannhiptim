@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="HEARTSENSE - PWA tim mach da nen tang cho mobile va web, ho tro Face PPG, Finger PPG demo, breathing coach, SOS va bao cao dai han."
+    />
+    <meta name="theme-color" content="#10233f" />
+    <title>HEARTSENSE Multi-Platform Care</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">HEARTSENSE v3.0</p>
+          <h1>App + website tim mach da nen tang, uu tien web de co the deploy va dung ngay tren trinh duyet.</h1>
+          <p class="lead">
+            Mot PWA co the chay nhu website, cai nhu app, va la nen tang tot de sau nay dong goi
+            thanh mobile app. HEARTSENSE tap trung vao onboarding, do PPG bang webcam/camera,
+            breathing coach, SOS, nhat ky va bao cao hang tuan.
+          </p>
+          <div class="hero-actions">
+            <button id="installBtn" class="ghost-btn" type="button" hidden>Cai dat PWA</button>
+            <button id="requestNotificationBtn" class="secondary-btn" type="button">Bat thong bao</button>
+            <a class="ghost-btn" href="#measurementSection">Bat dau do</a>
+          </div>
+        </div>
+
+        <div class="hero-panel">
+          <div class="hero-panel-top">
+            <span id="platformBadge" class="badge neutral">Dang nhan dien thiet bi...</span>
+            <span class="badge outline">HTTPS can thiet cho webcam</span>
+          </div>
+          <div class="signal-grid compact">
+            <article>
+              <span>Mobile App</span>
+              <strong>Finger PPG + Face PPG</strong>
+            </article>
+            <article>
+              <span>Web App / PWA</span>
+              <strong>Face PPG + Breathing</strong>
+            </article>
+            <article>
+              <span>Backend chung</span>
+              <strong>SSO + SOS + Bao cao</strong>
+            </article>
+            <article>
+              <span>Trang thai</span>
+              <strong id="healthStatus">Chua ket noi</strong>
+            </article>
+          </div>
+        </div>
+      </header>
+
+      <main class="main-grid">
+        <section class="card architecture-card">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">A. Kien truc</p>
+              <h2>Web-first PWA, de deploy website truoc va mo rong thanh app sau</h2>
+            </div>
+          </div>
+
+          <div class="architecture-grid">
+            <article class="info-panel">
+              <h3>Mobile</h3>
+              <ul class="feature-list">
+                <li>Finger PPG voi camera sau + flash demo</li>
+                <li>Face PPG voi camera truoc</li>
+                <li>Breathing coach, offline shell, SOS cue</li>
+              </ul>
+            </article>
+            <article class="info-panel">
+              <h3>Web</h3>
+              <ul class="feature-list">
+                <li>Face PPG bang webcam trinh duyet</li>
+                <li>Breathing coach va dashboard rong</li>
+                <li>PDF/print report, lich su va dong bo</li>
+              </ul>
+            </article>
+            <article class="info-panel">
+              <h3>Backend</h3>
+              <ul class="feature-list">
+                <li>Auth dung chung, luu ho so, guardian, nhat ky</li>
+                <li>Heart-Print baseline, phan tich, SOS event</li>
+                <li>File store prototype, san sang doi sang DB sau</li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="card auth-card">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Giai doan 1</p>
+              <h2>Thiet lap & ca nhan hoa</h2>
+            </div>
+            <div id="authState" class="state-pill">Chua dang nhap.</div>
+          </div>
+
+          <div class="form-grid">
+            <form id="registerForm" class="stack-form">
+              <h3>Tao tai khoan HEARTSENSE</h3>
+              <label>
+                Ho va ten
+                <input name="fullName" type="text" placeholder="Nguyen Van A" required />
+              </label>
+              <label>
+                Email
+                <input name="email" type="email" placeholder="ban@example.com" required />
+              </label>
+              <label>
+                Mat khau
+                <input name="password" type="password" placeholder="HeartSense123!" required />
+              </label>
+              <label>
+                Tuoi
+                <input name="age" type="number" min="18" max="100" value="62" required />
+              </label>
+              <label>
+                Gioi tinh
+                <select name="gender">
+                  <option value="male">Nam</option>
+                  <option value="female">Nu</option>
+                  <option value="other">Khac</option>
+                </select>
+              </label>
+              <label>
+                Benh ly nen
+                <input
+                  name="conditions"
+                  type="text"
+                  placeholder="Cao huyet ap, tieu duong, dot quy"
+                />
+              </label>
+              <button class="primary-btn" type="submit">Dang ky va khoi tao ho so</button>
+            </form>
+
+            <form id="loginForm" class="stack-form">
+              <h3>Dang nhap</h3>
+              <label>
+                Email
+                <input name="email" type="email" placeholder="ban@example.com" required />
+              </label>
+              <label>
+                Mat khau
+                <input name="password" type="password" placeholder="HeartSense123!" required />
+              </label>
+              <div class="button-row">
+                <button class="secondary-btn" type="submit">Dang nhap</button>
+                <button id="logoutBtn" class="ghost-btn" type="button">Dang xuat</button>
+              </div>
+              <a id="reportLink" class="ghost-btn disabled" href="#" target="_blank" rel="noreferrer">
+                Mo report / In PDF
+              </a>
+              <p class="muted">
+                Web va mobile se dung chung mot tai khoan. Day la nen tang SSO prototype de sau nay
+                mo rong thanh auth san pham that.
+              </p>
+            </form>
+
+            <form id="guardianForm" class="stack-form">
+              <h3>Nguoi giam ho</h3>
+              <label>
+                Ten nguoi than
+                <input name="guardianName" type="text" placeholder="Tran Thi B" />
+              </label>
+              <label>
+                So dien thoai
+                <input name="guardianPhone" type="text" placeholder="0901234567" />
+              </label>
+              <label>
+                Email
+                <input name="guardianEmail" type="email" placeholder="nguoi-than@example.com" />
+              </label>
+              <button class="primary-btn" type="submit">Luu guardian & gui xac nhan</button>
+              <div id="guardianStatus" class="muted">Chua thiet lap guardian.</div>
+            </form>
+          </div>
+
+          <div class="baseline-grid">
+            <article class="info-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="section-kicker">Heart-Print</p>
+                  <h3>Baseline 3 lan luc nghi ngo</h3>
+                </div>
+                <span id="baselineCountBadge" class="badge neutral">0/3 lan</span>
+              </div>
+              <p class="muted">
+                Dung webcam tren web hoac finger PPG tren mobile de ghi 3 phien baseline. Sau 3 lan,
+                HEARTSENSE se sinh moc nhip tim nghi va HRV ca nhan.
+              </p>
+              <div class="button-row">
+                <button id="recordBaselineBtn" class="primary-btn" type="button">Luu lan baseline hien tai</button>
+                <button id="refreshDashboardBtn" class="ghost-btn" type="button">Tai dashboard</button>
+              </div>
+            </article>
+
+            <article class="info-panel">
+              <h3>Ho so ca nhan</h3>
+              <div id="profileSummary" class="list-box">
+                <p class="muted">Dang cho ho so nguoi dung.</p>
+              </div>
+            </article>
+
+            <article class="info-panel">
+              <h3>Baseline hien tai</h3>
+              <div id="baselineSummary" class="list-box">
+                <p class="muted">Chua du du lieu Heart-Print.</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="measurementSection" class="card measurement-card">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Giai doan 2</p>
+              <h2>Quy trinh do luong da thiet bi</h2>
+            </div>
+            <div id="deviceHint" class="state-pill muted-pill">Dang kiem tra webcam...</div>
+          </div>
+
+          <div class="measurement-grid">
+            <div class="camera-stage">
+              <video id="cameraVideo" autoplay muted playsinline></video>
+              <canvas id="cameraCanvas" class="hidden"></canvas>
+              <div class="camera-overlay">
+                <div class="face-frame"></div>
+                <div class="scan-line"></div>
+              </div>
+              <div id="measurementOverlay" class="measurement-overlay hidden">
+                <span id="measurementTimer">60</span>
+                <strong id="measurementModeLabel">Dang chuan bi...</strong>
+              </div>
+            </div>
+
+            <div class="stack-form">
+              <div class="signal-grid">
+                <article>
+                  <span>Do sang</span>
+                  <strong id="lightMetric">--</strong>
+                </article>
+                <article>
+                  <span>Do on dinh</span>
+                  <strong id="stabilityMetric">--</strong>
+                </article>
+                <article>
+                  <span>Chat luong tin hieu</span>
+                  <strong id="qualityMetric">--</strong>
+                </article>
+                <article>
+                  <span>Che do</span>
+                  <strong id="captureModeLabel">Face PPG</strong>
+                </article>
+              </div>
+
+              <div class="button-row">
+                <button id="startCameraBtn" class="secondary-btn" type="button">Bat camera</button>
+                <button id="stopCameraBtn" class="ghost-btn" type="button">Tat camera</button>
+              </div>
+
+              <div class="segmented">
+                <button data-mode="face" class="segmented-btn active" type="button">Do bang khuon mat</button>
+                <button data-mode="finger" class="segmented-btn" type="button">Do bang ngon tay</button>
+                <button data-mode="breathing" class="segmented-btn" type="button">Breathing coach</button>
+              </div>
+
+              <p id="modeDescription" class="muted">
+                Web uu tien Face PPG bang webcam. Neu khong co webcam, ban co the cai PWA tren mobile
+                hoac tai native app sau nay de dung Finger PPG chinh xac hon.
+              </p>
+
+              <div class="button-row">
+                <button id="startMeasureBtn" class="primary-btn" type="button">Bat dau do 60 giay</button>
+                <button id="startBreathingBtn" class="secondary-btn" type="button">Bat dau tap tho</button>
+              </div>
+
+              <div class="note-box">
+                <strong>Huong dan</strong>
+                <p id="captureGuide" class="muted">
+                  Nhin thang vao camera, ngoi yen, dam bao mat du sang va tranh di chuyen manh trong 60 giay.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="coach-grid">
+            <article class="info-panel">
+              <div class="panel-head">
+                <h3>Breathing Coach</h3>
+                <span id="breathingStatus" class="badge neutral">Chua bat dau</span>
+              </div>
+              <div class="breathing-stage">
+                <div id="breathingCircle" class="breathing-circle">
+                  <span id="breathingPhase">Hit vao</span>
+                </div>
+              </div>
+              <p id="breathingHint" class="muted">
+                Nhip goi y 4-4-6. Vong tron phong to khi hit vao, giu nhip o giua, thu nho khi tho ra.
+              </p>
+            </article>
+
+            <article class="info-panel">
+              <h3>Waveform demo</h3>
+              <svg id="waveChart" viewBox="0 0 600 180" class="wave-chart" aria-label="Waveform">
+                <path id="wavePath" d="" />
+              </svg>
+              <p class="muted">
+                Day la wave demo tu tin hieu webcam/camera de trinh dien UX. Can model/chuan do y te that
+                neu muon dua vao san pham y khoa.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="card result-card">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Giai doan 3</p>
+              <h2>Phan tich va phan hoi</h2>
+            </div>
+            <span id="riskBadge" class="badge neutral">Dang cho ket qua</span>
+          </div>
+
+          <div class="results-grid">
+            <article class="info-panel">
+              <h3>Ket qua tuc thi</h3>
+              <div class="signal-grid">
+                <article>
+                  <span>Nhip tim</span>
+                  <strong id="bpmResult">-- BPM</strong>
+                </article>
+                <article>
+                  <span>HRV score</span>
+                  <strong id="hrvResult">--</strong>
+                </article>
+                <article>
+                  <span>Stroke Risk</span>
+                  <strong id="strokeRiskResult">--%</strong>
+                </article>
+                <article>
+                  <span>AFib index</span>
+                  <strong id="afibResult">--</strong>
+                </article>
+              </div>
+              <p id="resultHeadline" class="headline-note">
+                Chua co du lieu. Bat dau bang Face PPG tren web hoac Finger PPG tren mobile/PWA.
+              </p>
+              <p id="resultDescription" class="muted">
+                HEARTSENSE phan loai theo baseline, do on dinh RR, chat luong tin hieu va yeu to nguy co
+                nen.
+              </p>
+            </article>
+
+            <article class="info-panel">
+              <h3>Hanh dong de xuat</h3>
+              <div id="recommendationBox" class="list-box">
+                <p class="muted">Chua co khuyen nghi.</p>
+              </div>
+            </article>
+
+            <article class="info-panel danger-panel">
+              <div class="panel-head">
+                <h3>SOS / Hanh lang xanh</h3>
+                <span id="sosBadge" class="badge neutral">Chua kich hoat</span>
+              </div>
+              <div id="sosBox" class="list-box">
+                <p class="muted">Neu ket qua AFib/high risk xuat hien, he thong se bat dem 15 giay truoc khi gui SOS.</p>
+              </div>
+              <div class="button-row">
+                <button id="cancelSosBtn" class="ghost-btn" type="button">Toi on - huy SOS</button>
+                <button id="triggerSosBtn" class="secondary-btn" type="button">Kich hoat ngay</button>
+              </div>
+              <div class="button-row">
+                <a class="primary-btn" href="tel:115">Goi 115</a>
+                <a
+                  class="ghost-btn"
+                  href="https://www.google.com/maps/search/benh+vien+gan+nhat"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Mo ban do benh vien
+                </a>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="card care-card">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Giai doan 4</p>
+              <h2>Quan ly dai han</h2>
+            </div>
+          </div>
+
+          <div class="care-grid">
+            <article class="info-panel">
+              <h3>Nhat ky trieu chung</h3>
+              <form id="symptomForm" class="stack-form">
+                <label>
+                  Ghi chu nhanh
+                  <input name="note" type="text" placeholder="Hom nay hoi tuc nguc, met, kho ngu..." required />
+                </label>
+                <button class="primary-btn" type="submit">Luu nhat ky</button>
+              </form>
+              <div id="symptomList" class="list-box">
+                <p class="muted">Chua co nhat ky trieu chung.</p>
+              </div>
+            </article>
+
+            <article class="info-panel">
+              <h3>Nhac nho uong thuoc (OCR prototype)</h3>
+              <form id="reminderForm" class="stack-form">
+                <label>
+                  Anh nhan thuoc
+                  <input id="labelImageInput" name="labelImage" type="file" accept="image/*" />
+                </label>
+                <label>
+                  Ten thuoc
+                  <input id="medicineNameInput" name="medicineName" type="text" placeholder="Vi du: amlodipine" required />
+                </label>
+                <label>
+                  Gio nhac
+                  <input name="time" type="time" value="08:00" required />
+                </label>
+                <button class="secondary-btn" type="submit">Tao lich nhac</button>
+              </form>
+              <div id="reminderList" class="list-box">
+                <p class="muted">Chua co lich nhac thuoc.</p>
+              </div>
+            </article>
+
+            <article class="info-panel">
+              <h3>Bao cao & moi truong</h3>
+              <div id="weeklyReportBox" class="list-box">
+                <p class="muted">Bao cao hang tuan se xuat hien sau khi co du lieu.</p>
+              </div>
+              <div id="weatherBox" class="list-box">
+                <p class="muted">Canh bao thoi tiet mo phong se hien tai day.</p>
+              </div>
+            </article>
+          </div>
+
+          <div class="history-grid">
+            <article class="info-panel">
+              <h3>Lich su do</h3>
+              <div id="historyChart" class="timeline"></div>
+            </article>
+
+            <article class="info-panel">
+              <h3>Nhat ky SOS</h3>
+              <div id="sosHistory" class="list-box">
+                <p class="muted">Chua co su kien SOS.</p>
+              </div>
+            </article>
+
+            <article class="info-panel">
+              <h3>Dong bo & su kien he thong</h3>
+              <div id="ledgerList" class="list-box">
+                <p class="muted">Chua co su kien dong bo.</p>
+              </div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "name": "heartsense-platform",
+  "version": "3.1.0",
+  "private": true,
+  "description": "HEARTSENSE multi-platform workspace: legacy prototype + production web/mobile/api scaffold.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "prototype:start": "node server.js",
+    "web:dev": "npm --workspace apps/web run dev",
+    "api:dev": "npm --workspace apps/api run dev",
+    "mobile:start": "npm --workspace apps/mobile run start",
+    "db:generate": "npx prisma generate",
+    "db:migrate": "npx prisma migrate dev"
+  },
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "node-fetch": "^2.6.11",
+    "uuid": "^9.0.0"
+  }
+}

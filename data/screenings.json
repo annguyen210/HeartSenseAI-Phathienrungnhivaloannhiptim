@@ -1,0 +1,186 @@
+[
+  {
+    "id": "00fa9b86-89e7-44c9-82ba-02eedd3dd5e5",
+    "userId": "8fd21582-7906-4ea6-82f3-b82780125937",
+    "type": "retina",
+    "payload": {
+      "imageMetrics": {
+        "contrast": 78,
+        "centerBalance": 88,
+        "quality": 86,
+        "sharpness": 82,
+        "brightness": 114,
+        "redRatio": 0.56
+      },
+      "intake": {
+        "notes": "test",
+        "symptoms": "blur",
+        "hba1c": 8.4,
+        "yearsWithDiabetes": 9
+      }
+    },
+    "result": {
+      "type": "retina",
+      "qualityPass": true,
+      "quality": 86,
+      "confidence": 85,
+      "lowConfidence": false,
+      "riskScore": 85,
+      "level": "high",
+      "microaneurysmCount": 9,
+      "hemorrhageCount": 5,
+      "edemaRisk": "Cao",
+      "eyeScore": 25,
+      "retinalAge": 79,
+      "vascularAge": 66,
+      "reminderDays": 7,
+      "recommendation": "Can kham chuyen khoa mat trong 7 ngay va mang theo bao cao RetinaCheck.",
+      "comparisonSummary": "Chua co baseline cu. Ket qua nay duoc luu lam moc so sanh cho lan sau.",
+      "heatmapPoints": [
+        {
+          "x": 68,
+          "y": 34,
+          "intensity": 68
+        },
+        {
+          "x": 48,
+          "y": 30,
+          "intensity": 76
+        },
+        {
+          "x": 58,
+          "y": 36,
+          "intensity": 65
+        }
+      ],
+      "imageMetrics": {
+        "contrast": 78,
+        "centerBalance": 88,
+        "quality": 86,
+        "sharpness": 82,
+        "brightness": 114,
+        "redRatio": 0.56
+      },
+      "intake": {
+        "notes": "test",
+        "symptoms": "blur",
+        "hba1c": 8.4,
+        "yearsWithDiabetes": 9
+      },
+      "knowledgeFallback": []
+    },
+    "createdAt": "2026-04-21T08:10:03.397Z"
+  },
+  {
+    "id": "74eca8e1-6b80-434b-b2c4-92cfb851089b",
+    "userId": "a5052ba3-c0a7-474c-ab85-2bbb06d9e6d2",
+    "type": "face",
+    "payload": {
+      "lightScore": 82,
+      "signalQuality": 79,
+      "irregularityIndex": 67,
+      "stabilityScore": 74,
+      "estimatedBpm": 96,
+      "hrvScore": 31,
+      "waveform": [
+        40,
+        55,
+        70,
+        52,
+        68,
+        46,
+        72
+      ]
+    },
+    "result": {
+      "type": "face",
+      "bpm": 96,
+      "hrvScore": 31,
+      "strokeRiskScore": 98,
+      "irregularityIndex": 67,
+      "lightScore": 82,
+      "stabilityScore": 74,
+      "signalQuality": 79,
+      "confidence": 79,
+      "classification": "afib",
+      "baselineStatus": "Chua hoan thanh 3 lan baseline Heart-Print",
+      "recommendation": [
+        "Nghiem tuc: can theo doi sat. Neu co choang vang, kho tho, yeu tay chan hoac noi lap bap, can lien he cap cuu.",
+        "Nen hoan thanh du 3 lan baseline de AI hoc Heart-Print ca nhan."
+      ],
+      "waveform": [
+        40,
+        55,
+        70,
+        52,
+        68,
+        46,
+        72
+      ],
+      "shouldTriggerSos": true,
+      "generatedAt": "2026-04-23T14:39:38.130Z"
+    },
+    "createdAt": "2026-04-23T14:39:38.130Z"
+  },
+  {
+    "id": "113f144a-1d70-4cc3-bd29-9036e0bd8534",
+    "userId": "dc4439f7-f09c-4b73-bf48-f76701f01430",
+    "type": "face",
+    "payload": {
+      "estimatedBpm": 101,
+      "hrvScore": 28,
+      "stabilityScore": 71,
+      "systolic": 148,
+      "irregularityIndex": 63,
+      "contextNote": "stress",
+      "signalQuality": 80,
+      "waveform": [
+        40,
+        50,
+        64,
+        45,
+        69,
+        44,
+        70
+      ],
+      "lightScore": 84
+    },
+    "result": {
+      "type": "face",
+      "bpm": 101,
+      "hrvScore": 28,
+      "strokeRiskScore": 99,
+      "irregularityIndex": 63,
+      "lightScore": 84,
+      "stabilityScore": 71,
+      "signalQuality": 80,
+      "systolic": 148,
+      "confidence": 79,
+      "classification": "afib",
+      "baselineStatus": "Chua hoan thanh 3 lan baseline Heart-Print",
+      "contextNote": "stress",
+      "recommendation": [
+        "Canh bao bat thuong nghiem trong. Neu co choang vang, kho tho, met lu, yeu tay chan hoac noi lap bap, can lien he cap cuu.",
+        "Nen hoan thanh 3 lan baseline Heart-Print de he thong so sanh ca nhan chinh xac hon."
+      ],
+      "waveform": [
+        40,
+        50,
+        64,
+        45,
+        69,
+        44,
+        70
+      ],
+      "shouldTriggerSos": true,
+      "generatedAt": "2026-04-23T15:19:16.369Z"
+    },
+    "notes": [
+      {
+        "reason": "stress",
+        "createdAt": "2026-04-23T15:19:16.408Z"
+      }
+    ],
+    "createdAt": "2026-04-23T15:19:16.369Z"
+  }
+]

@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String              @id @default(cuid())
+  fullName        String
+  email           String              @unique
+  passwordHash    String
+  age             Int
+  gender          String
+  conditions      String[]
+  systolicDefault Int?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  guardians       Guardian[]
+  measurements    Measurement[]
+  symptoms        SymptomLog[]
+  reminders       MedicationReminder[]
+  pushDevices     PushDevice[]
+  sosEvents       SosEvent[]
+  baseline        HeartPrintBaseline?
+}
+
+model Guardian {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  phone       String?
+  email       String?
+  zaloEnabled Boolean  @default(false)
+  smsEnabled  Boolean  @default(false)
+  emailEnabled Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model HeartPrintBaseline {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  restingBpm      Float?
+  hrvScore        Float?
+  regularityScore Float?
+  sampleCount     Int      @default(0)
+  samples         Json
+  completedAt     DateTime?
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Measurement {
+  id               String   @id @default(cuid())
+  userId           String
+  kind             String
+  bpm              Float
+  hrvScore         Float
+  strokeRiskScore  Float
+  irregularityIndex Float
+  signalQuality    Float
+  systolic         Float?
+  confidence       Float
+  classification   String
+  contextNote      String?
+  waveform         Json
+  metadata         Json
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SymptomLog {
+  id        String   @id @default(cuid())
+  userId    String
+  note      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MedicationReminder {
+  id          String   @id @default(cuid())
+  userId      String
+  medicineName String
+  timeOfDay   String
+  sourceImage String?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PushDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  endpoint   String
+  keys       Json
+  platform   String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SosEvent {
+  id         String   @id @default(cuid())
+  userId     String
+  reason     String
+  status     String
+  channels   String[]
+  payload    Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

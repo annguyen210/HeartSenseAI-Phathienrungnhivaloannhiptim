@@ -1,0 +1,167 @@
+[
+  {
+    "id": "8fd21582-7906-4ea6-82f3-b82780125937",
+    "fullName": "Test User",
+    "email": "test@example.com",
+    "yearsWithDiabetes": 9,
+    "caregiverName": "Nguoi than",
+    "caregiverContact": "0900000000",
+    "password": {
+      "salt": "f1dcfd188dd7223927a82a10a06535a2",
+      "hash": "ea7fbe5c77b1d4836d90bdfbf272ed9c3ef274d835b5bcfee4cf909169c6e08e9611a4dfdab27b72f661ddaf6a5235cd39809389e48a47adf542000595ac4a10"
+    },
+    "createdAt": "2026-04-21T08:10:03.381Z"
+  },
+  {
+    "id": "fdaed51f-0bb1-4433-98af-1e47a496667f",
+    "fullName": "Test User",
+    "email": "test-heartsense@example.com",
+    "age": 64,
+    "gender": "female",
+    "conditions": [
+      "cao huyet ap",
+      "tieu duong"
+    ],
+    "guardian": {
+      "guardianName": "",
+      "guardianPhone": "",
+      "guardianEmail": "",
+      "status": "not_configured"
+    },
+    "baseline": {
+      "sessions": [],
+      "restingBpm": null,
+      "hrvScore": null,
+      "regularityScore": null,
+      "complete": false
+    },
+    "password": {
+      "salt": "af07d7c69bfdfa90628bbe4f294f4a11",
+      "hash": "b9c9b289b880c6e2f8f6cbd31e67878d99aa246ae3e53fe365b8804529e06dd28ef7fa94aaf0adcd5b17813d939f099358fa6850c99a8d91bc5b8e442c677a78"
+    },
+    "createdAt": "2026-04-23T14:37:50.042Z"
+  },
+  {
+    "id": "9735d5f7-61ec-4bc5-bfe4-ca4cdb592d29",
+    "fullName": "Test User",
+    "email": "heartsense-20260423213905@example.com",
+    "age": 64,
+    "gender": "female",
+    "conditions": [
+      "cao huyet ap",
+      "tieu duong"
+    ],
+    "guardian": {
+      "guardianName": "",
+      "guardianPhone": "",
+      "guardianEmail": "",
+      "status": "not_configured"
+    },
+    "baseline": {
+      "sessions": [],
+      "restingBpm": null,
+      "hrvScore": null,
+      "regularityScore": null,
+      "complete": false
+    },
+    "password": {
+      "salt": "2b4b54786fe48282ca417184ce0a45fb",
+      "hash": "94946b24e8abf1b865fc98e6e9b389a0a4a0093dad834e34d7558bda7a8d776260ef19c745caafd931cfd3971175c6c4e84c684b0a815c311bc3ba67b293f9a9"
+    },
+    "createdAt": "2026-04-23T14:39:05.549Z"
+  },
+  {
+    "id": "a5052ba3-c0a7-474c-ab85-2bbb06d9e6d2",
+    "fullName": "Measure User",
+    "email": "measure-20260423213937@example.com",
+    "age": 68,
+    "gender": "male",
+    "conditions": [
+      "cao huyet ap",
+      "dot quy"
+    ],
+    "guardian": {
+      "guardianName": "",
+      "guardianPhone": "",
+      "guardianEmail": "",
+      "status": "not_configured"
+    },
+    "baseline": {
+      "sessions": [],
+      "restingBpm": null,
+      "hrvScore": null,
+      "regularityScore": null,
+      "complete": false
+    },
+    "password": {
+      "salt": "fc3116f7043c2d181f38be81f55c4d88",
+      "hash": "292b02582ead9787bda3c3f31ae3f13882466c593770a5528dfac2a7a45da0551a443ea754e88f6289b8d695c5d4a2cd67c6ecd297da415503bac815608cb3b3"
+    },
+    "createdAt": "2026-04-23T14:39:38.035Z"
+  },
+  {
+    "id": "dc4439f7-f09c-4b73-bf48-f76701f01430",
+    "fullName": "Full Test",
+    "email": "fulltest-20260423221915@example.com",
+    "age": 66,
+    "gender": "male",
+    "conditions": [
+      "cao huyet ap",
+      "tieu duong"
+    ],
+    "guardian": {
+      "guardianName": "",
+      "guardianPhone": "",
+      "guardianEmail": "",
+      "status": "not_configured",
+      "channels": []
+    },
+    "baseline": {
+      "sessions": [],
+      "restingBpm": null,
+      "hrvScore": null,
+      "regularityScore": null,
+      "complete": false
+    },
+    "password": {
+      "salt": "cd9b313a51a2617444d04d8330a124d1",
+      "hash": "0a42168d49416f0b4766a0d4546e5c14db5cb1ccc6f48b4a9480c0cf57622909a56795182a1befda826f8da0a065a15842d37d082ebbcc3d940e3ff011d60039"
+    },
+    "createdAt": "2026-04-23T15:19:16.170Z"
+  },
+  {
+    "id": "e4cf5616-a3e1-4bb3-b4e3-a4e87b4b005d",
+    "fullName": "SOS Test",
+    "email": "sos-20260423221950@example.com",
+    "age": 70,
+    "gender": "female",
+    "conditions": [
+      "cao huyet ap",
+      "dot quy"
+    ],
+    "guardian": {
+      "guardianName": "Nguoi Than",
+      "guardianPhone": "0901234567",
+      "guardianEmail": "guardian@example.com",
+      "status": "confirmation_sent",
+      "channels": [
+        "sms",
+        "email",
+        "zalo"
+      ],
+      "updatedAt": "2026-04-23T15:19:51.052Z"
+    },
+    "baseline": {
+      "sessions": [],
+      "restingBpm": null,
+      "hrvScore": null,
+      "regularityScore": null,
+      "complete": false
+    },
+    "password": {
+      "salt": "a519b03a7fdd3858a98b9f0bf0a39fab",
+      "hash": "f05d9011c20bca16ed6ef5da1188e567fc2bf17bb00e7dbab73c4f3397f99ae8727ed5ee86cd0bcdc7cd7dc910ae9651ab8c7c9e78126d66bc805b3931bf97e5"
+    },
+    "createdAt": "2026-04-23T15:19:50.923Z"
+  }
+]

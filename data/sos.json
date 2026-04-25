@@ -1,0 +1,15 @@
+[
+  {
+    "id": "de6a3a91-4602-4c44-ab45-29cd3b24c1ed",
+    "userId": "e4cf5616-a3e1-4bb3-b4e3-a4e87b4b005d",
+    "reason": "AFib nghi ngo",
+    "status": "triggered",
+    "channels": [
+      "sms",
+      "zalo",
+      "email",
+      "web-notification"
+    ],
+    "createdAt": "2026-04-23T15:19:51.107Z"
+  }
+]
