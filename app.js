@@ -577,36 +577,80 @@ function setMeasurementMode(mode) {
   }
 }
 
-// Bật/tắt đèn flash (torch) — chỉ hoạt động trên điện thoại có đèn flash
+// Bật/tắt đèn flash — trả về true nếu thành công
 async function setTorch(enable) {
-  if (!state.stream) return;
+  if (!state.stream) return false;
   const track = state.stream.getVideoTracks()[0];
-  if (!track) return;
+  if (!track) return false;
   try {
-    const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-    if (!capabilities.torch) return; // thiết bị không hỗ trợ torch API
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (!caps.torch) return false;
     await track.applyConstraints({ advanced: [{ torch: enable }] });
-  } catch {
-    // một số thiết bị không hỗ trợ torch qua applyConstraints — bỏ qua lỗi
-  }
+    return true;
+  } catch { return false; }
+}
+
+// Tìm camera sau có hỗ trợ torch trong danh sách thiết bị
+async function findTorchCamera() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const rearCams = devices.filter(d => d.kind === "videoinput" &&
+      (d.label.toLowerCase().includes("back") ||
+       d.label.toLowerCase().includes("rear") ||
+       d.label.toLowerCase().includes("environment") ||
+       d.label === "")); // label rỗng = chưa cấp quyền, thử hết
+    // Thử từng camera sau xem cái nào có torch
+    for (const cam of rearCams) {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { deviceId: { exact: cam.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
+        const track = s.getVideoTracks()[0];
+        const caps = track?.getCapabilities ? track.getCapabilities() : {};
+        if (caps.torch) {
+          s.getTracks().forEach(t => t.stop()); // dừng stream test
+          return cam.deviceId; // trả về deviceId của camera có torch
+        }
+        s.getTracks().forEach(t => t.stop());
+      } catch { /* camera này không dùng được, thử tiếp */ }
+    }
+  } catch { /* enumerateDevices thất bại */ }
+  return null;
 }
 
 async function startCamera() {
   try {
     if (state.stream) stopCamera();
     const isFingerMode = state.measurementMode === "finger";
-    const videoConstraint = state.selectedCameraId
-      ? { deviceId: { exact: state.selectedCameraId } }
-      : { facingMode: isFingerMode ? { ideal: "environment" } : { ideal: "user" } };
+    const isMob = isMobile();
+
+    let videoConstraint;
+    if (state.selectedCameraId) {
+      videoConstraint = { deviceId: { exact: state.selectedCameraId } };
+    } else if (isFingerMode && isMob) {
+      // Với điện thoại nhiều camera: tìm camera có torch trước
+      const torchCamId = await findTorchCamera();
+      videoConstraint = torchCamId
+        ? { deviceId: { exact: torchCamId } }
+        : { facingMode: { ideal: "environment" } };
+    } else {
+      videoConstraint = { facingMode: isFingerMode ? { ideal: "environment" } : { ideal: "user" } };
+    }
+
     state.stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
       video: { ...videoConstraint, width: { ideal: 1280 }, height: { ideal: 720 } },
     });
     el.cameraVideo.srcObject = state.stream;
-    // Tự động bật đèn flash khi đo Finger PPG trên điện thoại
-    if (isFingerMode && isMobile()) {
-      await setTorch(true);
-      el.permissionHint.textContent = "🔦 Camera + đèn flash đã bật. Che kín ngón trỏ lên camera.";
+
+    if (isFingerMode && isMob) {
+      const torchOk = await setTorch(true);
+      if (torchOk) {
+        el.permissionHint.textContent = "🔦 Đèn flash đã bật! Úp đầu ngón trỏ che kín cụm camera.";
+      } else {
+        el.permissionHint.textContent = "⚠️ Camera bật nhưng flash không hỗ trợ tự động. Hãy tự bật đèn pin điện thoại rồi đặt ngón trỏ lên camera.";
+      }
     } else {
       el.permissionHint.textContent = "Camera đã cấp quyền. Chọn camera khác nếu cần.";
     }
