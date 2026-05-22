@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: heartsense
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: RESEND_API_KEY
+        value: re_bUL488Jt_JLhT6Qyk1xdpphgUh5Lv1q4E
+      - key: EMAIL_FROM
+        value: "HEARTSENSE <onboarding@resend.dev>"
+      - key: WEATHER_DEFAULT_QUERY
+        value: "Bac Ninh,VN"
