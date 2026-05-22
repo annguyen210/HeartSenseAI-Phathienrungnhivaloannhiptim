@@ -554,6 +554,8 @@ async function loadCameraDevices() {
 
 function setMeasurementMode(mode) {
   state.measurementMode = mode;
+  // Tắt đèn flash khi chuyển khỏi Finger PPG
+  if (mode !== "finger") setTorch(false);
   document.querySelectorAll(".segmented-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
   if (mode === "face") {
     el.captureModeLabel.textContent = "Face PPG";
@@ -575,15 +577,39 @@ function setMeasurementMode(mode) {
   }
 }
 
+// Bật/tắt đèn flash (torch) — chỉ hoạt động trên điện thoại có đèn flash
+async function setTorch(enable) {
+  if (!state.stream) return;
+  const track = state.stream.getVideoTracks()[0];
+  if (!track) return;
+  try {
+    const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+    if (!capabilities.torch) return; // thiết bị không hỗ trợ torch API
+    await track.applyConstraints({ advanced: [{ torch: enable }] });
+  } catch {
+    // một số thiết bị không hỗ trợ torch qua applyConstraints — bỏ qua lỗi
+  }
+}
+
 async function startCamera() {
   try {
     if (state.stream) stopCamera();
+    const isFingerMode = state.measurementMode === "finger";
     const videoConstraint = state.selectedCameraId
       ? { deviceId: { exact: state.selectedCameraId } }
-      : { facingMode: state.measurementMode === "finger" ? { ideal: "environment" } : { ideal: "user" } };
-    state.stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { ...videoConstraint, width: { ideal: 1280 }, height: { ideal: 720 } } });
+      : { facingMode: isFingerMode ? { ideal: "environment" } : { ideal: "user" } };
+    state.stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { ...videoConstraint, width: { ideal: 1280 }, height: { ideal: 720 } },
+    });
     el.cameraVideo.srcObject = state.stream;
-    el.permissionHint.textContent = "Camera đã cấp quyền. Chọn camera khác nếu cần.";
+    // Tự động bật đèn flash khi đo Finger PPG trên điện thoại
+    if (isFingerMode && isMobile()) {
+      await setTorch(true);
+      el.permissionHint.textContent = "🔦 Camera + đèn flash đã bật. Che kín ngón trỏ lên camera.";
+    } else {
+      el.permissionHint.textContent = "Camera đã cấp quyền. Chọn camera khác nếu cần.";
+    }
     startPreviewLoop();
     await loadCameraDevices();
   } catch {
@@ -592,7 +618,8 @@ async function startCamera() {
   }
 }
 
-function stopCamera() {
+async function stopCamera() {
+  await setTorch(false); // tắt đèn flash trước khi dừng camera
   if (state.previewRaf) { cancelAnimationFrame(state.previewRaf); state.previewRaf = null; }
   if (state.stream) { state.stream.getTracks().forEach((t) => t.stop()); state.stream = null; }
   state.previousSample = null;
