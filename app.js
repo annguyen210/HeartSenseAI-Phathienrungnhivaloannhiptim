@@ -580,19 +580,26 @@ function setMeasurementMode(mode) {
   }
 }
 
-// Bật/tắt đèn flash — trả về true nếu thành công
+// Bật/tắt torch trực tiếp — thử nhiều cách khác nhau
 async function setTorch(enable) {
   if (!state.stream) return false;
   const track = state.stream.getVideoTracks()[0];
   if (!track) return false;
+  // Cách 1: advanced constraints (chuẩn W3C)
   try {
-    const caps = track.getCapabilities ? track.getCapabilities() : {};
-    if (!caps.torch) return false;
     await track.applyConstraints({ advanced: [{ torch: enable }] });
     state.torchOn = enable;
     updateTorchBtn();
     return true;
-  } catch { return false; }
+  } catch {}
+  // Cách 2: torch trực tiếp (một số Android)
+  try {
+    await track.applyConstraints({ torch: enable });
+    state.torchOn = enable;
+    updateTorchBtn();
+    return true;
+  } catch {}
+  return false;
 }
 
 function updateTorchBtn() {
@@ -649,18 +656,9 @@ async function startCamera() {
     const isFingerMode = state.measurementMode === "finger";
     const isMob = isMobile();
 
-    let videoConstraint;
-    if (state.selectedCameraId) {
-      videoConstraint = { deviceId: { exact: state.selectedCameraId } };
-    } else if (isFingerMode && isMob) {
-      // Với điện thoại nhiều camera: tìm camera có torch trước
-      const torchCamId = await findTorchCamera();
-      videoConstraint = torchCamId
-        ? { deviceId: { exact: torchCamId } }
-        : { facingMode: { ideal: "environment" } };
-    } else {
-      videoConstraint = { facingMode: isFingerMode ? { ideal: "environment" } : { ideal: "user" } };
-    }
+    const videoConstraint = state.selectedCameraId
+      ? { deviceId: { exact: state.selectedCameraId } }
+      : { facingMode: isFingerMode ? { ideal: "environment" } : { ideal: "user" } };
 
     state.stream = await navigator.mediaDevices.getUserMedia({
       audio: false,
@@ -669,13 +667,12 @@ async function startCamera() {
     el.cameraVideo.srcObject = state.stream;
 
     if (isFingerMode && isMob) {
-      // Thử bật torch tự động
+      // Đợi track sẵn sàng rồi bật torch
+      await new Promise(r => setTimeout(r, 400));
       const torchOk = await setTorch(true);
-      if (torchOk) {
-        el.permissionHint.textContent = "🔦 Đèn flash đã bật! Úp đầu ngón trỏ che kín cụm camera.";
-      } else {
-        el.permissionHint.textContent = "Flash chưa bật — bấm nút 🔦 Bật Flash bên dưới hoặc tự bật đèn pin điện thoại.";
-      }
+      el.permissionHint.textContent = torchOk
+        ? "🔦 Flash đã bật! Úp ngón trỏ che kín cụm camera + flash."
+        : "⚠️ Thiết bị không cho bật flash qua app — bấm nút 🔦 bên dưới thử lại.";
     } else {
       el.permissionHint.textContent = "Camera đã cấp quyền. Chọn camera khác nếu cần.";
     }
