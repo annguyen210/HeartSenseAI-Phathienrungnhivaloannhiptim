@@ -14,6 +14,7 @@ const state = {
   sosTimer: null, sosRemaining: 15, breathingInterval: null, breathingTimeout: null,
   dashboardPoll: null, audioContext: null, modalConfirm: null,
   afibConfirmMode: false, measurementFps: 30,
+  torchOn: false, // trạng thái đèn flash
 };
 
 // ─── Element refs ─────────────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ const el = {
   captureGuide: document.querySelector("#captureGuide"),
   startCameraBtn: document.querySelector("#startCameraBtn"),
   stopCameraBtn: document.querySelector("#stopCameraBtn"),
+  torchBtn: document.querySelector("#torchBtn"),
   startMeasureBtn: document.querySelector("#startMeasureBtn"),
   startBreathingBtn: document.querySelector("#startBreathingBtn"),
   breathingCircle: document.querySelector("#breathingCircle"),
@@ -555,7 +557,8 @@ async function loadCameraDevices() {
 function setMeasurementMode(mode) {
   state.measurementMode = mode;
   // Tắt đèn flash khi chuyển khỏi Finger PPG
-  if (mode !== "finger") setTorch(false);
+  if (mode !== "finger") { setTorch(false); state.torchOn = false; }
+  updateTorchBtn();
   document.querySelectorAll(".segmented-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
   if (mode === "face") {
     el.captureModeLabel.textContent = "Face PPG";
@@ -586,8 +589,29 @@ async function setTorch(enable) {
     const caps = track.getCapabilities ? track.getCapabilities() : {};
     if (!caps.torch) return false;
     await track.applyConstraints({ advanced: [{ torch: enable }] });
+    state.torchOn = enable;
+    updateTorchBtn();
     return true;
   } catch { return false; }
+}
+
+function updateTorchBtn() {
+  if (!el.torchBtn) return;
+  const fingerMode = state.measurementMode === "finger" && isMobile();
+  el.torchBtn.hidden = !fingerMode || !state.stream;
+  el.torchBtn.textContent = state.torchOn ? "🔦 Tắt Flash" : "🔦 Bật Flash";
+  el.torchBtn.className = state.torchOn ? "primary-btn" : "ghost-btn";
+}
+
+async function toggleTorch() {
+  if (!state.stream) {
+    await startCamera();
+  }
+  const newState = !state.torchOn;
+  const ok = await setTorch(newState);
+  if (!ok && newState) {
+    el.permissionHint.textContent = "⚠️ Thiết bị không hỗ trợ flash qua app. Hãy bật đèn pin từ thanh thông báo điện thoại.";
+  }
 }
 
 // Tìm camera sau có hỗ trợ torch trong danh sách thiết bị
@@ -645,15 +669,17 @@ async function startCamera() {
     el.cameraVideo.srcObject = state.stream;
 
     if (isFingerMode && isMob) {
+      // Thử bật torch tự động
       const torchOk = await setTorch(true);
       if (torchOk) {
         el.permissionHint.textContent = "🔦 Đèn flash đã bật! Úp đầu ngón trỏ che kín cụm camera.";
       } else {
-        el.permissionHint.textContent = "⚠️ Camera bật nhưng flash không hỗ trợ tự động. Hãy tự bật đèn pin điện thoại rồi đặt ngón trỏ lên camera.";
+        el.permissionHint.textContent = "Flash chưa bật — bấm nút 🔦 Bật Flash bên dưới hoặc tự bật đèn pin điện thoại.";
       }
     } else {
       el.permissionHint.textContent = "Camera đã cấp quyền. Chọn camera khác nếu cần.";
     }
+    updateTorchBtn();
     startPreviewLoop();
     await loadCameraDevices();
   } catch {
@@ -738,6 +764,11 @@ async function runMeasurement() {
   if (state.measurementMode === "breathing") { startBreathingCoach(); return; }
   if (!state.stream) await startCamera();
   if (!state.stream) return;
+
+  // Giữ flash bật nếu đang đo Finger PPG và torch đã bật
+  if (state.measurementMode === "finger" && isMobile() && state.torchOn) {
+    await setTorch(true); // đảm bảo flash không tắt khi measurement bắt đầu
+  }
 
   state.measurementActive = true;
   state.measurementSamples = [];
@@ -1448,6 +1479,7 @@ function bindEvents() {
   el.refreshDashboardBtn.addEventListener("click", () => loadDashboard(true));
   el.startCameraBtn.addEventListener("click", startCamera);
   el.stopCameraBtn.addEventListener("click", stopCamera);
+  el.torchBtn?.addEventListener("click", toggleTorch);
   el.startMeasureBtn.addEventListener("click", runMeasurement);
   el.startBreathingBtn.addEventListener("click", startBreathingCoach);
   el.cancelSosBtn.addEventListener("click", cancelSos);
