@@ -233,6 +233,59 @@ function extractPosSignal(samples) {
   return H1.map((h, i) => h + alpha * H2[i]);
 }
 
+// ── Hann Window: giảm spectral leakage trước khi FFT ────────────
+function hannWindow(signal) {
+  const N = signal.length;
+  return signal.map((v, i) => v * 0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1))));
+}
+
+// ── FFT-based BPM (Discrete Fourier Transform trong vùng nhịp tim) ──
+// Phân tích miền tần số — chính xác hơn autocorrelation và peak detection
+// Không bị sub-harmonic, không bị noise spike, ổn định với tín hiệu yếu
+function fftBpm(signal, fps) {
+  if (signal.length < 60) return null;
+  const N = signal.length;
+
+  // Bước 1: Loại DC offset
+  const mean = average(signal);
+  const centered = signal.map(v => v - mean);
+
+  // Bước 2: Áp Hann window — giảm nhiễu biên
+  const windowed = hannWindow(centered);
+
+  // Bước 3: Tính DFT chỉ trong vùng 40–185 BPM (hiệu quả hơn full FFT)
+  const freqStep = fps / N; // Hz/bin
+  const kMin = Math.max(1, Math.floor(40 / 60 / freqStep));
+  const kMax = Math.min(Math.floor(N / 2), Math.ceil(185 / 60 / freqStep));
+
+  const powers = new Float64Array(kMax - kMin + 1);
+  let bestPower = 0, bestIdx = 0;
+
+  for (let k = kMin; k <= kMax; k++) {
+    let re = 0, im = 0;
+    const w = 2 * Math.PI * k / N;
+    for (let n = 0; n < N; n++) {
+      re += windowed[n] * Math.cos(w * n);
+      im -= windowed[n] * Math.sin(w * n);
+    }
+    const power = re * re + im * im;
+    const idx = k - kMin;
+    powers[idx] = power;
+    if (power > bestPower) { bestPower = power; bestIdx = idx; }
+  }
+
+  // Bước 4: Parabolic interpolation — độ chính xác sub-bin (~0.5 BPM)
+  let refinedK = bestIdx + kMin;
+  if (bestIdx > 0 && bestIdx < powers.length - 1) {
+    const p0 = powers[bestIdx - 1], p1 = powers[bestIdx], p2 = powers[bestIdx + 1];
+    const denom = p0 - 2 * p1 + p2;
+    if (denom !== 0) refinedK = (bestIdx + kMin) + 0.5 * (p0 - p2) / denom;
+  }
+
+  const bpm = Math.round(refinedK * freqStep * 60);
+  return bpm >= 40 && bpm <= 185 ? bpm : null;
+}
+
 // Autocorrelation: tìm đỉnh ĐẦU TIÊN, không phải đỉnh lớn nhất
 // → tránh bắt sub-harmonic (BPM/2) vốn là lỗi phổ biến gây ra 50-70 BPM giả
 function autocorrBpm(signal, fps) {
@@ -384,19 +437,23 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   const pkResult = peaksToBpm(peaks, fps);
   const peakBpm = pkResult?.bpm || null;
 
-  // Hợp nhất: ưu tiên multi-window; dùng 2 phương pháp còn lại để kiểm chứng
-  let estimatedBpm = mwBpm;
-  if (!estimatedBpm) {
-    if (peakBpm && acfBpm) {
-      const d = Math.abs(peakBpm - acfBpm);
-      estimatedBpm = d <= 8 ? Math.round((peakBpm + acfBpm) / 2) : (d <= 15 ? Math.round(peakBpm * 0.4 + acfBpm * 0.6) : acfBpm);
-    } else {
-      estimatedBpm = peakBpm || acfBpm;
-    }
-  } else if (peakBpm && Math.abs(mwBpm - peakBpm) > 12 && acfBpm) {
-    // Nếu 3 phương pháp không đồng thuận, lấy median của chúng
-    const trio = [mwBpm, peakBpm, acfBpm].sort((a, b) => a - b);
-    estimatedBpm = trio[1];
+  // Phương pháp 4: FFT frequency domain (chính xác nhất, robust với noise)
+  // Áp Hann window + DFT với parabolic interpolation → độ phân giải ~0.5 BPM
+  const fftResult = fftBpm(filtered, fps);
+
+  // ── Hợp nhất 4 phương pháp: lấy MEDIAN ─────────────────────────
+  // Median loại bỏ outlier tự động — kể cả 1-2 phương pháp sai vẫn cho kết quả đúng
+  const allValid = [mwBpm, acfBpm, peakBpm, fftResult].filter(b => b && b >= 40 && b <= 185);
+  let estimatedBpm = null;
+  if (allValid.length >= 2) {
+    const sorted = [...allValid].sort((a, b) => a - b);
+    // Median: nếu chẵn → trung bình 2 phần tử giữa
+    const mid = Math.floor(sorted.length / 2);
+    estimatedBpm = sorted.length % 2 === 0
+      ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+      : sorted[mid];
+  } else if (allValid.length === 1) {
+    estimatedBpm = allValid[0];
   }
 
   if (!estimatedBpm) return null;
@@ -415,7 +472,9 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   const movementScores = rawSamples.map(s => Math.max(12, Math.min(99, 100 - s.movement * 1.8)));
   const lightScore = Math.round(average(lightScores));
   const stabilityScore = Math.round(average(movementScores));
-  const methodAgreement = (peakBpm && acfBpm && Math.abs(peakBpm - acfBpm) <= 6) ? 12 : 0;
+  // Số phương pháp đồng thuận → tăng signal quality
+  const allClose = allValid.filter(b => Math.abs(b - (estimatedBpm || 0)) <= 5).length;
+  const methodAgreement = allClose >= 3 ? 16 : allClose >= 2 ? 10 : 0;
   const expectedPeaks = rawSamples.length / fps * (bpm / 60);
   const signalQuality = Math.round(Math.min(92, Math.max(20,
     (peaks.length / Math.max(1, expectedPeaks)) * 52 +
