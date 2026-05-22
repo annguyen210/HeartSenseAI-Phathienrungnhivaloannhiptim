@@ -5,7 +5,7 @@ services:
     plan: free
     buildCommand: npm install
     startCommand: node server.js
-    autoDeploy: true
+    autoDeploy: false
     envVars:
       - key: PORT
         value: 10000
