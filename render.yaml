@@ -17,3 +17,7 @@ services:
         value: "HEARTSENSE <onboarding@resend.dev>"
       - key: WEATHER_DEFAULT_QUERY
         value: "Bac Ninh,VN"
+      - key: SUPABASE_URL
+        value: https://ctcbikyiujmoadswchiw.supabase.co
+      - key: SUPABASE_SERVICE_KEY
+        sync: false

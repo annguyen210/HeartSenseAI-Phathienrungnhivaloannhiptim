@@ -104,19 +104,47 @@ const INTERACTION_PAIRS = [
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function cloneDefault(key) { return JSON.parse(JSON.stringify(DEFAULTS[key])); }
 
-function ensureDataStore() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  Object.entries(DATA_FILES).forEach(([key, filePath]) => {
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, JSON.stringify(cloneDefault(key), null, 2));
-      return;
-    }
-    try { JSON.parse(fs.readFileSync(filePath, "utf8")); }
-    catch { fs.writeFileSync(filePath, JSON.stringify(cloneDefault(key), null, 2)); }
-  });
+// ─── Supabase Storage Layer ───────────────────────────────────────────────────
+// Khi SUPABASE_URL + SUPABASE_SERVICE_KEY được set → dùng Supabase (persistent)
+// Khi không có → fallback về file JSON local (development)
+const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
+const USE_SUPABASE = Boolean(SUPABASE_URL && SUPABASE_KEY);
+
+// In-memory cache: mọi read từ cache → nhanh; write vào cache + Supabase đồng thời
+const _db = {};
+
+async function sbGet(key) {
+  const url = `${SUPABASE_URL}/rest/v1/kv_store?key=eq.${encodeURIComponent(key)}&select=value`;
+  try {
+    const rows = await requestJson(url, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    });
+    return Array.isArray(rows) && rows.length ? rows[0].value : null;
+  } catch (e) { console.error(`[Supabase GET ${key}]`, e.message); return null; }
+}
+
+async function sbSet(key, value) {
+  const payload = JSON.stringify({ key, value, updated_at: new Date().toISOString() });
+  try {
+    await requestJson(`${SUPABASE_URL}/rest/v1/kv_store`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(payload),
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: payload,
+    });
+  } catch (e) { console.error(`[Supabase SET ${key}]`, e.message); }
 }
 
 function readJson(key) {
+  // Luôn đọc từ cache (đã load từ Supabase lúc khởi động)
+  if (_db[key] !== undefined) return JSON.parse(JSON.stringify(_db[key]));
+  // Fallback file cho local dev
   try {
     const value = JSON.parse(fs.readFileSync(DATA_FILES[key], "utf8"));
     if (Array.isArray(DEFAULTS[key])) return Array.isArray(value) ? value : cloneDefault(key);
@@ -125,7 +153,42 @@ function readJson(key) {
   } catch { return cloneDefault(key); }
 }
 
-function writeJson(key, value) { fs.writeFileSync(DATA_FILES[key], JSON.stringify(value, null, 2)); }
+function writeJson(key, value) {
+  _db[key] = JSON.parse(JSON.stringify(value)); // cập nhật cache ngay lập tức
+  if (USE_SUPABASE) {
+    sbSet(key, value); // async fire-and-forget — không block response
+  } else {
+    try { fs.writeFileSync(DATA_FILES[key], JSON.stringify(value, null, 2)); } catch {}
+  }
+}
+
+async function initDataStore() {
+  if (USE_SUPABASE) {
+    console.log("[Supabase] Đang tải dữ liệu từ cloud...");
+    for (const key of Object.keys(DEFAULTS)) {
+      const data = await sbGet(key);
+      if (data !== null) {
+        _db[key] = data;
+        const count = Array.isArray(data) ? `${data.length} records` : "loaded";
+        console.log(`  ✓ ${key}: ${count}`);
+      } else {
+        _db[key] = cloneDefault(key);
+        await sbSet(key, _db[key]); // tạo row rỗng lần đầu
+        console.log(`  ✓ ${key}: khởi tạo mới`);
+      }
+    }
+    console.log(`[Supabase] Sẵn sàng ☁️ — ${Object.keys(_db).length} bảng đã tải.`);
+  } else {
+    // Local dev: đọc từ file vào cache
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    for (const [key, filePath] of Object.entries(DATA_FILES)) {
+      if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, JSON.stringify(cloneDefault(key), null, 2));
+      try { _db[key] = JSON.parse(fs.readFileSync(filePath, "utf8")); }
+      catch { _db[key] = cloneDefault(key); }
+    }
+    console.log("[Local] File storage sẵn sàng 📁");
+  }
+}
 function sendJson(res, status, payload) { res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" }); res.end(JSON.stringify(payload)); }
 function sendText(res, status, body, contentType = "text/plain; charset=utf-8") { res.writeHead(status, { "Content-Type": contentType }); res.end(body); }
 
@@ -1365,14 +1428,14 @@ async function handleRequest(req, res) {
   serveStatic(urlObject, res);
 }
 
-ensureDataStore();
-updateSyncStats();
-
-http.createServer((req, res) => {
-  handleRequest(req, res).catch((err) => {
-    sendJson(res, 500, { error: "Server error", detail: err.message });
+initDataStore().then(() => {
+  updateSyncStats();
+  http.createServer((req, res) => {
+    handleRequest(req, res).catch((err) => {
+      sendJson(res, 500, { error: "Server error", detail: err.message });
+    });
+  }).listen(PORT, () => {
+    console.log(`HEARTSENSE v4.0 running at http://localhost:${PORT}`);
+    console.log(`Storage: ${USE_SUPABASE ? "Supabase ☁️ (persistent)" : "Local files 📁 (ephemeral)"}`);
   });
-}).listen(PORT, () => {
-  console.log(`HEARTSENSE v4.0 running at http://localhost:${PORT}`);
-  console.log(`Features: AFib Burden, Stroke Predictor 72h, Shock Index, Drug Interactions, Doctor Export, Thermal Strain, Pill-in-Pocket, Remote Parent`);
 });
