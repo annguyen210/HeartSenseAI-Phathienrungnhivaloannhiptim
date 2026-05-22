@@ -2,7 +2,7 @@
 const HEARTSENSE_TOKEN_KEY = "heartsense_token";
 const MEASUREMENT_SECONDS = 30;
 const BREATHING_SECONDS = 60;
-const DASHBOARD_POLL_MS = 20000;
+const DASHBOARD_POLL_MS = 60000; // 60s thay vì 20s — giảm tải Render Free tier
 const TARGET_FPS = 30;
 
 const state = {
@@ -1065,12 +1065,15 @@ function renderDashboard(dashboard) {
   }
 }
 
-async function loadDashboard() {
+async function loadDashboard(showError = false) {
   if (!state.user || !state.token) return;
   try {
     const d = await api(`/api/users/${state.user.id}/dashboard?token=${encodeURIComponent(state.token)}`);
     renderDashboard(d);
-  } catch (err) { setAuthState(err.message, "error"); }
+  } catch (err) {
+    // Chỉ hiện lỗi khi người dùng bấm nút refresh thủ công, không hiện khi auto-poll
+    if (showError) setAuthState(err.message, "error");
+  }
 }
 
 function startDashboardPolling() {
@@ -1371,7 +1374,7 @@ function bindEvents() {
   el.logoutBtn.addEventListener("click", logout);
   el.guardianForm.addEventListener("submit", saveGuardian);
   el.recordBaselineBtn.addEventListener("click", recordBaseline);
-  el.refreshDashboardBtn.addEventListener("click", loadDashboard);
+  el.refreshDashboardBtn.addEventListener("click", () => loadDashboard(true));
   el.startCameraBtn.addEventListener("click", startCamera);
   el.stopCameraBtn.addEventListener("click", stopCamera);
   el.startMeasureBtn.addEventListener("click", runMeasurement);
