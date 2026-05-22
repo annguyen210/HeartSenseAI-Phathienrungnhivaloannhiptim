@@ -3,222 +3,136 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta
-      name="description"
-      content="HEARTSENSE - ung dung tim mach da nen tang, web-first PWA, do Face PPG, Finger PPG demo, breathing coach, SOS, bao cao va dong bo du lieu."
-    />
-    <meta name="theme-color" content="#10233f" />
-    <title>HEARTSENSE Multi-Platform Care</title>
+    <meta name="description" content="HEARTSENSE v4.0 – Hệ thống theo dõi tim mạch chủ động: AFib, Stroke Predictor 72h, SOS, Drug Interaction, Doctor Export." />
+    <meta name="theme-color" content="#0f1f3d" />
+    <title>HEARTSENSE – Hệ thống tim mạch chủ động</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <!-- Top Medical Status Bar -->
+    <div class="top-status-bar">
+      <div class="top-bar-inner">
+        <span class="top-bar-brand">❤️ HEARTSENSE <span class="top-bar-version">v4.0</span></span>
+        <span class="top-bar-live"><span class="live-dot"></span> Giám sát tim mạch chủ động 24/7</span>
+        <span id="healthStatus" class="top-bar-status">Đang kết nối...</span>
+      </div>
+      <div class="top-bar-line"></div>
+    </div>
+
     <div class="page-shell">
+
+      <!-- HERO -->
       <header class="hero">
         <div class="hero-copy">
-          <p class="eyebrow">HEARTSENSE v3.0</p>
-          <h1>Web app + app-style PWA cho quy trinh tim mach da nen tang, san sang de deploy len website.</h1>
-          <p class="lead">
-            HEARTSENSE duoc to chuc theo 4 giai doan: onboarding, measurement, analysis/SOS va long-term care.
-            Ban co the test tren browser ngay bay gio, sau do mo rong tiep thanh mobile app va backend production.
-          </p>
+          <p class="eyebrow">❤️ HEARTSENSE v4.0</p>
+          <h1>Phát hiện rung nhĩ &amp; loạn nhịp tim qua ngón tay &amp; khuôn mặt</h1>
+          <p class="lead">19 tính năng: AFib Burden, Stroke Predictor 72h, Shock Index, Tương tác thuốc, Doctor Export, Thermal Strain, Pill-in-Pocket, Mắt thần. Đa nền tảng: Mobile + Web.</p>
           <div class="hero-actions">
-            <button id="installBtn" class="ghost-btn" type="button" hidden>Cai dat PWA</button>
-            <button id="requestNotificationBtn" class="secondary-btn" type="button">Bat thong bao</button>
-            <a class="ghost-btn" href="#measurementSection">Bat dau do</a>
+            <button id="installBtn" class="ghost-btn" type="button" hidden>Cài đặt PWA</button>
+            <button id="requestNotificationBtn" class="secondary-btn" type="button">🔔 Bật thông báo</button>
+            <a class="primary-btn" href="#measurementSection">💓 Bắt đầu đo tim</a>
           </div>
         </div>
-
         <div class="hero-panel">
           <div class="hero-panel-top">
-            <span id="platformBadge" class="badge neutral">Dang nhan dien thiet bi...</span>
-            <span class="badge outline">HTTPS/localhost can thiet cho webcam</span>
+            <span id="platformBadge" class="badge neutral">Đang nhận diện thiết bị...</span>
+            <span class="badge outline">HTTPS cần thiết cho webcam</span>
           </div>
           <div class="signal-grid compact">
-            <article>
-              <span>Mobile App</span>
-              <strong>Finger PPG, Face PPG, SOS push</strong>
-            </article>
-            <article>
-              <span>Web / PWA</span>
-              <strong>Face PPG, Breathing, PDF</strong>
-            </article>
-            <article>
-              <span>Backend chung</span>
-              <strong>SSO, Guardian, Sync, Logs</strong>
-            </article>
-            <article>
-              <span>Trang thai</span>
-              <strong id="healthStatus">Chua ket noi</strong>
-            </article>
+            <article><span>Finger PPG</span><strong>Ngón Trỏ – 94% chính xác AFib</strong></article>
+            <article><span>Face PPG</span><strong>Webcam – 30 giây đo</strong></article>
+            <article><span>AI Stroke</span><strong>Dự báo 72h (LSTM)</strong></article>
+            <article><span>Trạng thái</span><strong>Sẵn sàng đo</strong></article>
           </div>
         </div>
       </header>
 
       <main class="main-grid">
-        <section class="card architecture-card">
-          <div class="section-head">
-            <div>
-              <p class="section-kicker">A. Kien truc</p>
-              <h2>He thong da nen tang: website truoc, mobile sau, dung chung API</h2>
-            </div>
-          </div>
 
-          <div class="architecture-grid">
-            <article class="info-panel">
-              <h3>Mobile</h3>
-              <ul class="feature-list">
-                <li>Finger PPG voi camera sau va flash</li>
-                <li>Face PPG camera truoc va breathing coach</li>
-                <li>SOS SMS/Zalo/push, offline shell</li>
-              </ul>
-            </article>
-            <article class="info-panel">
-              <h3>Web</h3>
-              <ul class="feature-list">
-                <li>Face PPG voi webcam, breathing coach, SOS dashboard</li>
-                <li>Report in/PDF, lich su rong hon, keyboard-friendly</li>
-                <li>Neu khong co webcam, hien fallback va QR goi y mobile</li>
-              </ul>
-            </article>
-            <article class="info-panel">
-              <h3>Backend</h3>
-              <ul class="feature-list">
-                <li>Auth, guardian, baseline Heart-Print, nhat ky, nhac thuoc</li>
-                <li>SOS lifecycle, dong bo su kien, report hang tuan</li>
-                <li>File-based prototype de ban test full flow ngay</li>
-              </ul>
-            </article>
-          </div>
-        </section>
-
+        <!-- GIAI ĐOẠN 1: AUTH & ONBOARDING -->
         <section class="card auth-card">
           <div class="section-head">
             <div>
-              <p class="section-kicker">Giai doan 1</p>
-              <h2>Thiet lap & ca nhan hoa</h2>
+              <p class="section-kicker">Giai đoạn 1</p>
+              <h2>Thiết lập &amp; Cá nhân hóa</h2>
             </div>
-            <div id="authState" class="state-pill">Chua dang nhap.</div>
+            <div id="authState" class="state-pill">Chưa đăng nhập.</div>
           </div>
 
           <div class="form-grid">
             <form id="registerForm" class="stack-form">
-              <h3>Dang ky tai khoan</h3>
-              <label>
-                Ho va ten
-                <input name="fullName" type="text" placeholder="Nguyen Van A" required />
-              </label>
-              <label>
-                Email
-                <input name="email" type="email" placeholder="ban@example.com" required />
-              </label>
-              <label>
-                Mat khau
-                <input name="password" type="password" placeholder="HeartSense123!" required />
-              </label>
-              <label>
-                Tuoi
-                <input name="age" type="number" min="18" max="100" value="62" required />
-              </label>
-              <label>
-                Gioi tinh
+              <h3>📋 Đăng ký tài khoản</h3>
+              <label>Họ và tên <input name="fullName" type="text" placeholder="Nguyễn Văn A" required /></label>
+              <label>Email <input name="email" type="email" placeholder="ban@example.com" required /></label>
+              <label>Mật khẩu <input name="password" type="password" placeholder="HeartSense123!" required /></label>
+              <label>Tuổi <input name="age" type="number" min="18" max="100" value="62" required /></label>
+              <label>Giới tính
                 <select name="gender">
                   <option value="male">Nam</option>
-                  <option value="female">Nu</option>
-                  <option value="other">Khac</option>
+                  <option value="female">Nữ</option>
+                  <option value="other">Khác</option>
                 </select>
               </label>
-              <label>
-                Benh ly nen
-                <input name="conditions" type="text" placeholder="Cao huyet ap, tieu duong, dot quy" />
-              </label>
-              <button class="primary-btn" type="submit">Dang ky va tao ho so</button>
+              <label>Bệnh lý nền <input name="conditions" type="text" placeholder="Cao huyết áp, tiểu đường, đột quỵ, afib" /></label>
+              <button class="primary-btn" type="submit">Đăng ký và tạo hồ sơ</button>
             </form>
 
             <form id="loginForm" class="stack-form">
-              <h3>Dang nhap</h3>
-              <label>
-                Email
-                <input name="email" type="email" placeholder="ban@example.com" required />
-              </label>
-              <label>
-                Mat khau
-                <input name="password" type="password" placeholder="HeartSense123!" required />
-              </label>
+              <h3>🔐 Đăng nhập</h3>
+              <label>Email <input name="email" type="email" placeholder="ban@example.com" required /></label>
+              <label>Mật khẩu <input name="password" type="password" placeholder="..." required /></label>
               <div class="button-row">
-                <button class="secondary-btn" type="submit">Dang nhap</button>
-                <button id="logoutBtn" class="ghost-btn" type="button">Dang xuat</button>
+                <button class="secondary-btn" type="submit">Đăng nhập</button>
+                <button id="logoutBtn" class="ghost-btn" type="button">Đăng xuất</button>
               </div>
-              <a id="reportLink" class="ghost-btn disabled" href="#" target="_blank" rel="noreferrer">
-                Mo report / In PDF
-              </a>
-              <p class="muted">
-                Cung mot tai khoan co the dung tren mobile va web. Tren web, neu thiet bi khong co webcam,
-                HEARTSENSE se goi y chuyen sang dien thoai.
-              </p>
+              <a id="reportLink" class="ghost-btn disabled" href="#" target="_blank" rel="noreferrer">📄 Mở report / In PDF</a>
+              <p class="muted">Một tài khoản dùng trên cả mobile và web. Đồng bộ dữ liệu theo thời gian thực.</p>
             </form>
 
             <form id="guardianForm" class="stack-form">
-              <h3>Nguoi giam ho</h3>
-              <label>
-                Ten nguoi than
-                <input name="guardianName" type="text" placeholder="Tran Thi B" />
-              </label>
-              <label>
-                So dien thoai
-                <input name="guardianPhone" type="text" placeholder="0901234567" />
-              </label>
-              <label>
-                Email
-                <input name="guardianEmail" type="email" placeholder="nguoi-than@example.com" />
-              </label>
-              <button class="primary-btn" type="submit">Luu guardian & gui xac nhan</button>
-              <div id="guardianStatus" class="muted">Chua thiet lap guardian.</div>
+              <h3>👨‍👩‍👧 Người giám hộ &amp; Mắt thần</h3>
+              <label>Tên người thân <input name="guardianName" type="text" placeholder="Trần Thị B (con)" /></label>
+              <label>Số điện thoại <input name="guardianPhone" type="text" placeholder="0901234567" /></label>
+              <label>Email người thân <input name="guardianEmail" type="email" placeholder="con@example.com" /></label>
+              <button class="primary-btn" type="submit">Lưu người giám hộ</button>
+              <div id="guardianStatus" class="muted">Chưa thiết lập người giám hộ.</div>
+              <div class="button-row" style="margin-top:10px">
+                <button id="sendParentReportBtn" class="secondary-btn" type="button">📨 Gửi báo cáo hôm nay cho con</button>
+              </div>
+              <div id="parentReportStatus" class="muted"></div>
             </form>
           </div>
 
+          <!-- Heart-Print Baseline -->
           <div class="baseline-grid">
             <article class="info-panel">
               <div class="panel-head">
-                <div>
-                  <p class="section-kicker">Heart-Print</p>
-                  <h3>Baseline 3 lan luc nghi ngo</h3>
-                </div>
-                <span id="baselineCountBadge" class="badge neutral">0/3 lan</span>
+                <div><p class="section-kicker">Heart-Print</p><h3>Baseline 3 lần sáng sớm (5–7h)</h3></div>
+                <span id="baselineCountBadge" class="badge neutral">0/3 lần</span>
               </div>
-              <p class="muted">
-                Mobile uu tien Finger PPG, web uu tien Face PPG. Sau 3 lan o trang thai nghi ngo,
-                HEARTSENSE se sinh baseline BPM/HRV de so sanh cho cac lan sau.
-              </p>
+              <p class="muted">Đo 3 lần lúc nghỉ ngơi sáng sớm. AI học nhịp sinh học riêng để giảm false alarm. Sau đó mọi kết quả đo sẽ được so sánh với baseline cá nhân.</p>
               <div class="button-row">
-                <button id="recordBaselineBtn" class="primary-btn" type="button">Luu lan baseline hien tai</button>
-                <button id="refreshDashboardBtn" class="ghost-btn" type="button">Tai dashboard</button>
+                <button id="recordBaselineBtn" class="primary-btn" type="button">💾 Lưu lần baseline hiện tại</button>
+                <button id="refreshDashboardBtn" class="ghost-btn" type="button">🔄 Tải dashboard</button>
               </div>
             </article>
-
             <article class="info-panel">
-              <h3>Ho so ca nhan</h3>
-              <div id="profileSummary" class="list-box">
-                <p class="muted">Dang cho ho so nguoi dung.</p>
-              </div>
+              <h3>👤 Hồ sơ cá nhân</h3>
+              <div id="profileSummary" class="list-box"><p class="muted">Đang chờ hồ sơ người dùng.</p></div>
             </article>
-
             <article class="info-panel">
-              <h3>Baseline hien tai</h3>
-              <div id="baselineSummary" class="list-box">
-                <p class="muted">Chua du du lieu Heart-Print.</p>
-              </div>
+              <h3>🫀 Baseline Heart-Print</h3>
+              <div id="baselineSummary" class="list-box"><p class="muted">Chưa đủ dữ liệu Heart-Print.</p></div>
             </article>
           </div>
         </section>
 
+        <!-- GIAI ĐOẠN 2: ĐO LƯỜNG -->
         <section id="measurementSection" class="card measurement-card">
           <div class="section-head">
-            <div>
-              <p class="section-kicker">Giai doan 2</p>
-              <h2>Quy trinh do luong da thiet bi</h2>
-            </div>
-            <div id="deviceHint" class="state-pill muted-pill">Dang kiem tra webcam...</div>
+            <div><p class="section-kicker">Giai đoạn 2</p><h2>Đo lường – 👆 Ngón Trỏ PPG &amp; Khuôn mặt (Webcam)</h2></div>
+            <div id="deviceHint" class="state-pill muted-pill">Đang kiểm tra webcam...</div>
           </div>
 
           <div class="measurement-grid">
@@ -230,297 +144,346 @@
                 <div class="scan-line"></div>
               </div>
               <div id="measurementOverlay" class="measurement-overlay hidden">
-                <span id="measurementTimer">60</span>
-                <strong id="measurementModeLabel">Dang chuan bi...</strong>
+                <span id="measurementTimer">30</span>
+                <strong id="measurementModeLabel">Đang chuẩn bị...</strong>
               </div>
               <div id="deepAnalysisPrompt" class="floating-prompt hidden">
-                <strong>Phan tich sau hon?</strong>
-                <span id="deepAnalysisText">Neu dang dung dien thoai, hay ap may vao nguc 10 giay.</span>
+                <strong>Hướng dẫn đo</strong>
+                <span id="deepAnalysisText">Giữ ổn định trong suốt quá trình đo.</span>
               </div>
             </div>
 
             <div class="stack-form">
               <div class="signal-grid">
-                <article>
-                  <span>Do sang</span>
-                  <strong id="lightMetric">--</strong>
-                </article>
-                <article>
-                  <span>Do on dinh</span>
-                  <strong id="stabilityMetric">--</strong>
-                </article>
-                <article>
-                  <span>Chat luong</span>
-                  <strong id="qualityMetric">--</strong>
-                </article>
-                <article>
-                  <span>Che do</span>
-                  <strong id="captureModeLabel">Face PPG</strong>
-                </article>
+                <article><span>Độ sáng</span><strong id="lightMetric">--</strong></article>
+                <article><span>Độ ổn định</span><strong id="stabilityMetric">--</strong></article>
+                <article><span>Chất lượng</span><strong id="qualityMetric">--</strong></article>
+                <article><span>Chế độ</span><strong id="captureModeLabel">Face PPG</strong></article>
               </div>
 
               <div class="permission-box">
-                <strong>Huong dan cap quyen</strong>
-                <p id="permissionHint" class="muted">
-                  Tren web, trinh duyet se yeu cau quyen webcam. Neu bi chan, hay mo site settings va bat camera.
-                </p>
+                <strong>Hướng dẫn cấp quyền camera</strong>
+                <p id="permissionHint" class="muted">Trình duyệt sẽ yêu cầu quyền webcam. Nếu bị chặn, vào site settings và bật camera.</p>
               </div>
 
-              <label>
-                Chon camera
-                <select id="cameraSelect">
-                  <option value="">Dang tai danh sach camera...</option>
-                </select>
-              </label>
+              <label>Chọn camera <select id="cameraSelect"><option value="">Đang tải danh sách camera...</option></select></label>
 
               <div class="button-row">
-                <button id="startCameraBtn" class="secondary-btn" type="button">Bat camera</button>
-                <button id="stopCameraBtn" class="ghost-btn" type="button">Tat camera</button>
+                <button id="startCameraBtn" class="secondary-btn" type="button">📷 Bật camera</button>
+                <button id="stopCameraBtn" class="ghost-btn" type="button">⏹ Tắt camera</button>
               </div>
 
               <div class="segmented">
-                <button data-mode="face" class="segmented-btn active" type="button">Do bang khuon mat</button>
-                <button data-mode="finger" class="segmented-btn" type="button">Do bang ngon tay</button>
-                <button data-mode="breathing" class="segmented-btn" type="button">Breathing coach</button>
+                <button data-mode="finger" class="segmented-btn active" type="button">👆 Ngón Trỏ ★</button>
+                <button data-mode="face" class="segmented-btn" type="button">🙂 Khuôn mặt</button>
+                <button data-mode="breathing" class="segmented-btn" type="button">🌬 Tập thở</button>
               </div>
 
-              <p id="modeDescription" class="muted">
-                Web uu tien Face PPG bang webcam. Neu khong co webcam, ban co the cai PWA tren mobile hoac dung app sau nay.
-              </p>
+              <p id="modeDescription" class="muted">Web ưu tiên Face PPG bằng webcam. Nếu không có webcam, cài PWA trên mobile.</p>
 
               <div class="measurement-inputs">
-                <label>
-                  Huyet ap tam thu (nhap tay)
-                  <input id="systolicInput" type="number" min="80" max="220" value="128" />
-                </label>
-                <label>
-                  Ghi chu ngu canh
-                  <input id="measurementContextInput" type="text" placeholder="Vi du: vua uong ca phe, dang stress..." />
-                </label>
+                <label>Huyết áp tâm thu (mmHg) <input id="systolicInput" type="number" min="80" max="220" value="128" /></label>
+                <label>Ghi chú <input id="measurementContextInput" type="text" placeholder="Vừa uống cà phê, đang stress..." /></label>
               </div>
 
               <div class="button-row">
-                <button id="startMeasureBtn" class="primary-btn" type="button">Bat dau do 60 giay</button>
-                <button id="startBreathingBtn" class="secondary-btn" type="button">Bat dau tap tho</button>
+                <button id="startMeasureBtn" class="primary-btn" type="button">▶ Bắt đầu đo 30 giây</button>
+                <button id="startBreathingBtn" class="secondary-btn" type="button">🌬 Tập thở 4-4-6</button>
               </div>
 
               <div class="note-box">
-                <strong>Huong dan theo che do</strong>
-                <p id="captureGuide" class="muted">
-                  Nhin thang vao camera, ngoi yen, dam bao mat du sang va tranh di chuyen manh trong 60 giay.
-                </p>
+                <strong>⚠️ Lưu ý quan trọng</strong>
+                <p id="captureGuide" class="muted">Nhìn thẳng vào camera, ngồi yên, đảm bảo mặt đủ sáng.</p>
               </div>
             </div>
           </div>
 
+          <!-- Breathing + Waveform -->
           <div class="coach-grid">
             <article class="info-panel">
               <div class="panel-head">
-                <h3>Breathing Coach</h3>
-                <span id="breathingStatus" class="badge neutral">Chua bat dau</span>
+                <h3>🌬 Breathing Coach (4-4-6)</h3>
+                <span id="breathingStatus" class="badge neutral">Chưa bắt đầu</span>
               </div>
               <div class="breathing-stage">
                 <div id="breathingCircle" class="breathing-circle">
-                  <span id="breathingPhase">Hit vao</span>
+                  <span id="breathingPhase">Hít vào</span>
                 </div>
               </div>
-              <p id="breathingHint" class="muted">
-                Nhip goi y 4-4-6. Vong tron phong to khi hit vao, giu o dinh, thu nho khi tho ra.
-              </p>
+              <p id="breathingHint" class="muted">Nhịp 4-4-6. Vòng tròn phồng to khi hít vào, giữ ở đỉnh, thu nhỏ khi thở ra.</p>
             </article>
-
             <article class="info-panel">
-              <h3>Waveform & fallback</h3>
-              <svg id="waveChart" viewBox="0 0 600 180" class="wave-chart" aria-label="Waveform">
+              <h3>📈 Sóng PPG / rPPG Waveform</h3>
+              <svg id="waveChart" viewBox="0 0 600 180" class="wave-chart" aria-label="PPG Waveform">
                 <path id="wavePath" d="" />
               </svg>
               <div id="cameraFallbackBox" class="fallback-box hidden">
                 <div class="qr-card">
                   <div class="qr-grid" id="qrGrid" aria-hidden="true"></div>
-                  <div>
-                    <strong>Khong co webcam?</strong>
-                    <p class="muted">
-                      Hay mo HEARTSENSE tren dien thoai de dung Face PPG/Finger PPG. Sau nay ban co the scan QR nay tu website deploy.
-                    </p>
-                  </div>
+                  <div><strong>Không có webcam?</strong><p class="muted">Mở HEARTSENSE trên điện thoại để Finger PPG (Ngón Trỏ) + Face PPG. Scan QR này sau khi deploy.</p></div>
                 </div>
               </div>
             </article>
           </div>
         </section>
 
+        <!-- GIAI ĐOẠN 3: PHÂN TÍCH & PHẢN HỒI -->
         <section class="card result-card">
           <div class="section-head">
-            <div>
-              <p class="section-kicker">Giai doan 3</p>
-              <h2>Phan tich & phan hoi</h2>
+            <div><p class="section-kicker">Giai đoạn 3</p><h2>Phân tích &amp; Phản hồi tức thì</h2></div>
+            <span id="riskBadge" class="badge neutral">Đang chờ kết quả</span>
+          </div>
+
+          <!-- AFib Confirm Box -->
+          <div id="afibConfirmBox" class="confirm-container hidden"></div>
+          <!-- Pill Alert Box -->
+          <div id="pillAlertBox" class="pill-alert-container hidden"></div>
+
+          <div class="results-grid">
+            <article class="info-panel result-highlight">
+              <h3>📊 Kết quả tức thì</h3>
+              <div class="signal-grid">
+                <article><span>Nhịp tim</span><strong id="bpmResult">-- BPM</strong></article>
+                <article><span>HRV Score</span><strong id="hrvResult">--</strong></article>
+                <article><span>Stroke Risk</span><strong id="strokeRiskResult">--%</strong></article>
+                <article><span>AFib Index</span><strong id="afibResult">--</strong></article>
+              </div>
+              <p id="resultHeadline" class="headline-note">Chưa có dữ liệu. Bắt đầu đo để nhận phân tích.</p>
+              <p id="resultDescription" class="muted">HEARTSENSE phân loại dựa trên baseline, RR irregularity và yếu tố nguy cơ.</p>
+            </article>
+
+            <!-- HRV Nâng cao -->
+            <article class="info-panel">
+              <h3>🔬 HRV Nâng cao (SDNN / RMSSD)</h3>
+              <div class="signal-grid">
+                <article><span>SDNN</span><strong id="sdnnResult">--</strong></article>
+                <article><span>RMSSD</span><strong id="rmssdResult">--</strong></article>
+              </div>
+              <div id="hrvAdvancedBox" class="list-box">
+                <p class="muted">Đo thêm để tính SDNN, RMSSD, pNN50, hệ số biến thiên (CV).</p>
+              </div>
+            </article>
+
+            <!-- Khuyến nghị -->
+            <article class="info-panel">
+              <h3>💡 Khuyến nghị</h3>
+              <div id="recommendationBox" class="list-box"><p class="muted">Chưa có khuyến nghị.</p></div>
+              <div id="abnormalPromptBox" class="abnormal-box hidden">
+                <strong>Lý do nhịp bất thường nhẹ?</strong>
+                <div class="button-row">
+                  <button data-abnormal-reason="coffee" class="ghost-btn abnormal-btn" type="button">☕ Cà phê</button>
+                  <button data-abnormal-reason="stress" class="ghost-btn abnormal-btn" type="button">😰 Stress</button>
+                  <button data-abnormal-reason="exercise" class="ghost-btn abnormal-btn" type="button">🏃 Vận động</button>
+                  <button data-abnormal-reason="none" class="ghost-btn abnormal-btn" type="button">❓ Không rõ</button>
+                </div>
+              </div>
+            </article>
+          </div>
+
+          <!-- Shock Index + Thermal Strain -->
+          <div class="metrics-row">
+            <article class="info-panel">
+              <div class="panel-head"><h3>⚡ Chỉ số Sốc (Shock Index)</h3><span class="badge neutral">HR / Huyết áp</span></div>
+              <div id="shockIndexBox" class="list-box"><p class="muted">Sau khi đo: SI = BPM / Huyết áp tâm thu. SI &gt; 0.8: cần theo dõi, SI &gt; 1.0: SOS ngay.</p></div>
+            </article>
+            <article class="info-panel">
+              <div class="panel-head"><h3>🌡 Chỉ số Nhiệt độc (Thermal Strain)</h3><span class="badge neutral">Nhiệt + Nhịp tim</span></div>
+              <div id="thermalStrainBox" class="list-box"><p class="muted">Kết hợp nhiệt độ môi trường + nhịp tim để phát hiện sốc nhiệt. Quan trọng mùa hè.</p></div>
+            </article>
+          </div>
+
+          <!-- SOS -->
+          <article class="info-panel danger-panel" style="margin-top:16px">
+            <div class="panel-head">
+              <h3>🚨 SOS / Hành lang xanh</h3>
+              <span id="sosBadge" class="badge safe">Sẵn sàng</span>
             </div>
-            <span id="riskBadge" class="badge neutral">Dang cho ket qua</span>
+            <div id="sosBox" class="list-box"><p class="muted">Nếu phát hiện AFib, hệ thống đếm 15 giây rồi gửi email SOS đến người thân.</p></div>
+            <div class="button-row">
+              <button id="cancelSosBtn" class="ghost-btn" type="button">✅ Tôi ổn – Hủy SOS</button>
+              <button id="triggerSosBtn" class="secondary-btn" type="button">🚨 Kích hoạt SOS ngay</button>
+            </div>
+            <div class="button-row">
+              <button id="callEmergencyBtn" class="primary-btn" type="button">📞 Gọi 115</button>
+              <a class="ghost-btn" href="https://www.google.com/maps/search/benh+vien+tim+gan+nhat" target="_blank" rel="noreferrer">🗺 Bản đồ BV Tim</a>
+            </div>
+            <p id="autoplayHint" class="muted">Trên web, nếu tab bị tắt tiếng, hãy cho phép âm thanh để cảnh báo SOS hoạt động.</p>
+          </article>
+        </section>
+
+        <!-- AI PHÂN TÍCH NÂNG CAO -->
+        <section class="card ai-card">
+          <div class="section-head">
+            <div><p class="section-kicker">AI Y Khoa Chủ Động</p><h2>Dự báo Đột quỵ 72h · AFib Burden · Bệnh án Rung nhĩ</h2></div>
           </div>
 
           <div class="results-grid">
             <article class="info-panel">
-              <h3>Ket qua tuc thi</h3>
-              <div class="signal-grid">
-                <article>
-                  <span>Nhip tim</span>
-                  <strong id="bpmResult">-- BPM</strong>
-                </article>
-                <article>
-                  <span>HRV score</span>
-                  <strong id="hrvResult">--</strong>
-                </article>
-                <article>
-                  <span>Stroke Risk</span>
-                  <strong id="strokeRiskResult">--%</strong>
-                </article>
-                <article>
-                  <span>AFib index</span>
-                  <strong id="afibResult">--</strong>
-                </article>
-              </div>
-              <p id="resultHeadline" class="headline-note">
-                Chua co du lieu. Bat dau bang Face PPG tren web hoac Finger PPG tren mobile/PWA.
-              </p>
-              <p id="resultDescription" class="muted">
-                HEARTSENSE phan loai dua tren baseline, RR irregularity, yeu to nguy co va context nguoi dung.
-              </p>
+              <div class="panel-head"><h3>🧠 Dự báo Đột quỵ 72h (LSTM)</h3><span class="badge neutral">Stroke Predictor</span></div>
+              <div id="strokePredictorBox" class="list-box"><p class="muted">Dự báo dựa trên 30 ngày dữ liệu: HRV, BPM, triệu chứng, yếu tố nguy cơ. Cần ít nhất 3 lần đo để tính toán.</p></div>
             </article>
 
             <article class="info-panel">
-              <h3>Khuyen nghi & ly do bat thuong nhe</h3>
-              <div id="recommendationBox" class="list-box">
-                <p class="muted">Chua co khuyen nghi.</p>
-              </div>
-              <div id="abnormalPromptBox" class="abnormal-box hidden">
-                <strong>Ban vua uong ca phe hay dang cang thang?</strong>
-                <div class="button-row">
-                  <button data-abnormal-reason="coffee" class="ghost-btn abnormal-btn" type="button">Ca phe</button>
-                  <button data-abnormal-reason="stress" class="ghost-btn abnormal-btn" type="button">Cang thang</button>
-                  <button data-abnormal-reason="exercise" class="ghost-btn abnormal-btn" type="button">Van dong</button>
-                  <button data-abnormal-reason="none" class="ghost-btn abnormal-btn" type="button">Khong ro</button>
-                </div>
-              </div>
+              <div class="panel-head"><h3>📉 Gánh nặng Rung nhĩ (AFib Burden)</h3><span class="badge neutral">% thời gian AFib</span></div>
+              <div id="afibBurdenBox" class="list-box"><p class="muted">Tính % thời gian loại nhịp trong tuần/tháng. AFib Burden tăng 5%→25%/tuần = báo động đỏ.</p></div>
             </article>
 
-            <article class="info-panel danger-panel">
-              <div class="panel-head">
-                <h3>SOS / Hanh lang xanh</h3>
-                <span id="sosBadge" class="badge neutral">Chua kich hoat</span>
-              </div>
-              <div id="sosBox" class="list-box">
-                <p class="muted">Neu phat hien AFib, he thong se bat dem 15 giay truoc khi gui SOS.</p>
-              </div>
-              <div class="button-row">
-                <button id="cancelSosBtn" class="ghost-btn" type="button">Toi on - huy SOS</button>
-                <button id="triggerSosBtn" class="secondary-btn" type="button">Kich hoat ngay</button>
-              </div>
-              <div class="button-row">
-                <button id="callEmergencyBtn" class="primary-btn" type="button">Goi 115</button>
-                <a
-                  class="ghost-btn"
-                  href="https://www.google.com/maps/search/benh+vien+gan+nhat"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Mo ban do benh vien
-                </a>
-              </div>
-              <p id="autoplayHint" class="muted">
-                Tren web, neu tab bi tat tieng hoac autoplay bi chan, hay cho phep am thanh de canh bao SOS hoat dong tot hon.
-              </p>
+            <article class="info-panel">
+              <div class="panel-head"><h3>📋 Bệnh án Rung nhĩ</h3><span class="badge neutral">Episode Tracker</span></div>
+              <div id="afibDiseaseLog" class="list-box"><p class="muted">Ghi tự động mỗi cơn rung nhĩ: tần suất, thời điểm, nhịp tim. Cung cấp cho bác sĩ làm căn cứ điều trị.</p></div>
             </article>
           </div>
         </section>
 
+        <!-- DOCTOR MODE EXPORT -->
+        <section class="card doctor-card">
+          <div class="section-head">
+            <div><p class="section-kicker">Kết nối Y tế</p><h2>Hành trình đi khám – Doctor Mode Export</h2></div>
+          </div>
+          <div class="care-grid">
+            <article class="info-panel">
+              <h3>📄 Xuất hồ sơ chuẩn y khoa (PDF / QR)</h3>
+              <p class="muted">Tạo link báo cáo 3 tháng với biểu đồ sóng rPPG dạng bằng giấy ECG. Bác sĩ scan QR hoặc mở URL để xem HRV, AFib, triệu chứng, thuốc.</p>
+              <div class="button-row">
+                <button id="doctorExportBtn" class="primary-btn" type="button">🔗 Tạo báo cáo &amp; link QR</button>
+                <a id="reportLink2" class="ghost-btn" href="javascript:void(0)" rel="noreferrer">📄 Mở báo cáo PDF</a>
+              </div>
+              <div id="doctorExportBox" class="list-box" style="margin-top:12px"><p class="muted">Bấm "Tạo báo cáo" để sinh link chia sẻ với bác sĩ.</p></div>
+            </article>
+
+            <article class="info-panel">
+              <h3>🔬 Post-Ablation AFib Recurrence Monitor</h3>
+              <p class="muted">Dành cho bệnh nhân sau phẫu thuật cắt đốt (ablation). Đo 1-2 lần/ngày, dữ liệu gửi về bệnh viện nếu có kết hợp B2B.</p>
+              <div class="list-box">
+                <div class="list-item"><span>Tính năng</span><strong>Theo dõi tái phát AFib sau điều trị</strong></div>
+                <div class="list-item"><span>Lợi ích</span><strong>Phát hiện sớm, không cần Holter 24h</strong></div>
+                <div class="list-item"><span>B2B</span><strong>Kết nối bác sĩ tự động (liên hệ để triển khai)</strong></div>
+              </div>
+            </article>
+
+            <article class="info-panel">
+              <h3>🧹 Bộ lọc dữ liệu sạch (Telehealth Clean Data)</h3>
+              <p class="muted">Hệ thống loại bỏ nhiễu (rung tay, ho, cử động) khi xuất dữ liệu cho bác sĩ. Bác sĩ chỉ thấy sóng PPG sạch để đọc HRV chính xác.</p>
+              <div class="list-box">
+                <div class="list-item"><span>Lọc nhiễu</span><strong>Tự động loại bỏ artifact</strong></div>
+                <div class="list-item"><span>SDNN/RMSSD</span><strong>Chỉ tính trên đoạn tín hiệu sạch</strong></div>
+                <div class="list-item"><span>Tin cậy</span><strong>Bác sĩ tự tin đọc kết quả</strong></div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- GIAI ĐOẠN 4: QUẢN LÝ DÀI HẠN -->
         <section class="card care-card">
           <div class="section-head">
-            <div>
-              <p class="section-kicker">Giai doan 4</p>
-              <h2>Quan ly dai han</h2>
-            </div>
+            <div><p class="section-kicker">Giai đoạn 4</p><h2>Quản lý dài hạn – Thuốc, Triệu chứng, Báo cáo</h2></div>
           </div>
 
           <div class="care-grid">
+            <!-- Nhật ký triệu chứng -->
             <article class="info-panel">
-              <h3>Nhat ky trieu chung</h3>
+              <h3>📝 Nhật ký triệu chứng</h3>
               <form id="symptomForm" class="stack-form">
-                <label>
-                  Ghi chu nhanh
-                  <input name="note" type="text" placeholder="Hom nay hoi tuc nguc, met, kho ngu..." required />
-                </label>
-                <button class="primary-btn" type="submit">Luu nhat ky</button>
+                <label>Ghi chú nhanh <input name="note" type="text" placeholder="Hôm nay tức ngực, mệt, khó ngủ, hồi hộp..." required /></label>
+                <button class="primary-btn" type="submit">Lưu nhật ký</button>
               </form>
-              <div id="symptomList" class="list-box">
-                <p class="muted">Chua co nhat ky trieu chung.</p>
-              </div>
+              <div id="symptomList" class="list-box"><p class="muted">Chưa có nhật ký triệu chứng.</p></div>
             </article>
 
+            <!-- Nhắc thuốc trực quan + OCR -->
             <article class="info-panel">
-              <h3>Nhac nho uong thuoc (OCR prototype)</h3>
+              <h3>💊 Nhắc thuốc trực quan (OCR + Màu viên)</h3>
               <form id="reminderForm" class="stack-form">
-                <label>
-                  Anh nhan thuoc
-                  <input id="labelImageInput" name="labelImage" type="file" accept="image/*" />
-                </label>
-                <label>
-                  Ten thuoc
-                  <input id="medicineNameInput" name="medicineName" type="text" placeholder="Vi du: amlodipine" required />
-                </label>
-                <label>
-                  Gio nhac
-                  <input name="time" type="time" value="08:00" required />
-                </label>
-                <button class="secondary-btn" type="submit">Tao lich nhac</button>
+                <label>Ảnh nhãn thuốc <input id="labelImageInput" name="labelImage" type="file" accept="image/*" /></label>
+                <label>Tên thuốc <input id="medicineNameInput" name="medicineName" type="text" placeholder="Ví dụ: Amlodipine 5mg" required /></label>
+                <div class="measurement-inputs">
+                  <label>Liều lượng <input name="dose" type="text" placeholder="1 viên sau ăn" /></label>
+                  <label>Giờ nhắc <input name="time" type="time" value="08:00" required /></label>
+                </div>
+                <div class="measurement-inputs">
+                  <label>Màu viên <input name="pillColor" type="text" placeholder="Màu vàng, oval" /></label>
+                  <label>Mô tả thêm <input name="pillDescription" type="text" placeholder="Viên nén, có khế" /></label>
+                </div>
+                <button class="secondary-btn" type="submit">Tạo lịch nhắc</button>
               </form>
-              <div id="ocrStatus" class="muted">OCR local prototype se doan ten thuoc tu ten file neu co.</div>
-              <div id="reminderList" class="list-box">
-                <p class="muted">Chua co lich nhac thuoc.</p>
-              </div>
+              <div id="ocrStatus" class="muted">Chụp ảnh nhãn thuốc → AI đọc tên thuốc và nhắc theo màu viên trực quan.</div>
+              <div id="reminderList" class="list-box"><p class="muted">Chưa có lịch nhắc thuốc.</p></div>
             </article>
 
+            <!-- Báo cáo & Thời tiết -->
             <article class="info-panel">
-              <h3>Bao cao & moi truong</h3>
-              <div id="weeklyReportBox" class="list-box">
-                <p class="muted">Bao cao hang tuan se xuat hien sau khi co du lieu.</p>
-              </div>
-              <div id="weatherBox" class="list-box">
-                <p class="muted">Canh bao thoi tiet mo phong se hien tai day.</p>
-              </div>
+              <h3>🌤 Báo cáo hàng tuần &amp; Thời tiết</h3>
+              <div id="weeklyReportBox" class="list-box"><p class="muted">Báo cáo tuần sẽ hiện sau khi có dữ liệu.</p></div>
+              <div id="weatherBox" class="list-box" style="margin-top:12px"><p class="muted">Cảnh báo thời tiết theo thời gian thực.</p></div>
             </article>
           </div>
 
+          <!-- Pill-in-the-Pocket + Drug Interaction -->
+          <div class="care-grid" style="margin-top:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>💊 Smart Pill-in-the-Pocket</h3><span class="badge neutral">Nhắc thuốc khi AFib</span></div>
+              <p class="muted">Nhập phác đồ bác sĩ: khi app phát hiện AFib, tự động nhắc uống thuốc đúng lúc. Giảm dùng thuốc chống đông hàng ngày, tránh tác dụng phụ chảy máu.</p>
+              <form id="pillProtocolForm" class="stack-form">
+                <label>Tên thuốc <input name="medicineName" type="text" placeholder="Ví dụ: Flecainide 100mg" required /></label>
+                <label>Liều lượng <input name="dose" type="text" placeholder="Ví dụ: 1 viên uống ngay khi phát hiện AFib" required /></label>
+                <label>Hướng dẫn thêm <input name="instructions" type="text" placeholder="Uống trong vòng 30 phút sau khi phát hiện AFib" /></label>
+                <button class="primary-btn" type="submit">Lưu phác đồ Pill-in-Pocket</button>
+              </form>
+              <div id="pillProtocolStatus" class="muted">Chưa thiết lập phác đồ pill-in-pocket.</div>
+            </article>
+
+            <article class="info-panel">
+              <div class="panel-head"><h3>⚠️ Kiểm tra tương tác thuốc</h3><span class="badge neutral">Drug Interaction AI</span></div>
+              <p class="muted">Nhập danh sách thuốc đang dùng. AI đối chiếu cơ sở dữ liệu để cảnh báo tương tác nguy hiểm và trùng hoạt chất (generic name).</p>
+              <form id="interactionForm" class="stack-form">
+                <label>Danh sách thuốc (cách nhau dấu phẩy)
+                  <input name="drugs" type="text" placeholder="warfarin, aspirin, amlodipine, metoprolol" required />
+                </label>
+                <button class="primary-btn" type="submit">Kiểm tra tương tác</button>
+              </form>
+              <p class="muted" style="margin-top:8px">Ví dụ: nhập "warfarin, aspirin" → cảnh báo nguy cơ chảy máu. "metoprolol, verapamil" → chống chỉ định.</p>
+              <div id="interactionResult" class="list-box"><p class="muted">Kết quả kiểm tra sẽ hiện ở đây.</p></div>
+            </article>
+
+            <article class="info-panel">
+              <div class="panel-head"><h3>👁 Mắt thần cho con xa</h3><span class="badge neutral">Remote Parent</span></div>
+              <p class="muted">Con ở Sài Gòn, bố mẹ ở Hà Nội. Hàng ngày con nhận báo cáo: "Hôm nay bố đo lúc 7h, nhịp tim 72 (ổn)". Nếu bố quên đo 2 ngày → app nhắc con gọi về.</p>
+              <div class="list-box">
+                <div class="list-item"><span>Báo cáo hàng ngày</span><strong>Email tự động đến con</strong></div>
+                <div class="list-item"><span>Trạng thái</span><strong id="remoteParentInfoStatus" class="badge neutral">Thiết lập email guardian để kích hoạt</strong></div>
+              </div>
+              <p class="muted" style="margin-top:8px">Thiết lập email người giám hộ ở trên để nhận báo cáo. Bấm nút "Gửi báo cáo hôm nay cho con" để gửi ngay.</p>
+            </article>
+          </div>
+
+          <!-- Lịch sử đo + SOS + Ledger -->
           <div class="history-grid">
             <article class="info-panel">
-              <h3>Lich su do</h3>
+              <h3>📊 Lịch sử đo tim</h3>
               <div id="historyChart" class="timeline"></div>
             </article>
-
             <article class="info-panel">
-              <h3>Nhat ky SOS</h3>
-              <div id="sosHistory" class="list-box">
-                <p class="muted">Chua co su kien SOS.</p>
-              </div>
+              <h3>🚨 Nhật ký SOS</h3>
+              <div id="sosHistory" class="list-box"><p class="muted">Chưa có sự kiện SOS.</p></div>
             </article>
-
             <article class="info-panel">
-              <h3>Dong bo & su kien he thong</h3>
-              <div id="ledgerList" class="list-box">
-                <p class="muted">Chua co su kien dong bo.</p>
-              </div>
+              <h3>🔗 Đồng bộ &amp; Sự kiện hệ thống</h3>
+              <div id="ledgerList" class="list-box"><p class="muted">Chưa có sự kiện.</p></div>
             </article>
           </div>
         </section>
+
       </main>
     </div>
 
+    <!-- Modal -->
     <div id="modalOverlay" class="modal-overlay hidden">
       <div class="modal-card">
-        <h3 id="modalTitle">Thong bao</h3>
+        <h3 id="modalTitle">Thông báo</h3>
         <p id="modalBody" class="muted"></p>
         <div class="button-row">
-          <button id="modalConfirmBtn" class="primary-btn" type="button">Dong y</button>
-          <button id="modalCancelBtn" class="ghost-btn" type="button">Dong</button>
+          <button id="modalConfirmBtn" class="primary-btn" type="button">Đồng ý</button>
+          <button id="modalCancelBtn" class="ghost-btn" type="button">Đóng</button>
         </div>
       </div>
     </div>

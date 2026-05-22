@@ -13,7 +13,11 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    "baseUrl": "."
+    "baseUrl": ".",
+    "paths": {
+      "@heartsense/shared": ["../../packages/shared/src/index.ts"],
+      "@heartsense/shared/*": ["../../packages/shared/src/*"]
+    }
   },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]

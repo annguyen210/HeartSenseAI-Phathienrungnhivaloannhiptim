@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "HEARTSENSE",
+    "slug": "heartsense",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0f1f3d"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.heartsense.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "HEARTSENSE cần camera để đo nhịp tim qua Finger PPG (Ngón Trỏ) và Face PPG.",
+        "NSMicrophoneUsageDescription": "Không sử dụng micro."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f1f3d"
+      },
+      "package": "com.heartsense.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.FLASHLIGHT"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "HEARTSENSE cần camera để đo nhịp tim.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "extra": {
+      "apiBaseUrl": "http://localhost:4000"
+    }
+  }
+}

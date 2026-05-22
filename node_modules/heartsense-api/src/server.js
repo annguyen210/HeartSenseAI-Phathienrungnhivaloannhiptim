@@ -167,13 +167,13 @@ const server = http.createServer(async (req, res) => {
     const email = await sendResendEmail({
       to: body.email,
       subject: "HEARTSENSE SOS Alert",
-      html: `<p>${body.reason || "Canh bao tim mach bat thuong"}</p>`,
+      html: `<p>${body.reason || "Cảnh báo tim mạch bất thường"}</p>`,
     });
     sendJson(res, 200, {
       ok: true,
       received: body,
       email,
-      message: "Endpoint production scaffold cho SOS email that qua Resend.",
+      message: "Endpoint production scaffold cho SOS email thật qua Resend.",
     });
     return;
   }

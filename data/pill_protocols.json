@@ -1,0 +1,11 @@
+[
+  {
+    "id": "37985f38-6800-4ed8-96dc-31abb1050ea0",
+    "userId": "7cdeb03e-d028-491e-8f18-5e963d636d23",
+    "medicineName": "Flecainide 100mg",
+    "dose": "1 vien uong ngay khi phat hien AFib",
+    "instructions": "Uong trong 30 phut sau khi phat hien",
+    "active": true,
+    "createdAt": "2026-05-19T16:00:27.316Z"
+  }
+]

@@ -1,0 +1,245 @@
+[
+  {
+    "id": "9001c640-d1cc-418c-b54d-6b6eb2e5b1c7",
+    "userId": "7cdeb03e-d028-491e-8f18-5e963d636d23",
+    "measurementId": "bc2e2aff-9f14-4ec5-957f-8dc2b0e52241",
+    "bpm": 115,
+    "detectedAt": "2026-05-19T16:02:21.148Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "bb16c6dd-ee95-4675-978a-d634b46c0f6f",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "cf0ca364-684c-44d6-b9de-68577ddd980d",
+    "bpm": 73,
+    "detectedAt": "2026-05-21T13:34:42.038Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "a4aff012-10d7-4807-a57b-58903ddd8621",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "101b8677-d280-45e5-904b-26c38ee72632",
+    "bpm": 89,
+    "detectedAt": "2026-05-21T13:35:31.761Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "d68abe0e-c1e9-4155-afb4-ed7d74928b8b",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "b147094c-cb24-4e9a-b16c-33f936aed85f",
+    "bpm": 116,
+    "detectedAt": "2026-05-21T13:36:27.885Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "616bce9c-cb52-4578-9a5f-c9dcd678f84a",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "ffa36257-3e65-4224-8ab6-bc08758e8b0d",
+    "bpm": 103,
+    "detectedAt": "2026-05-21T13:37:37.498Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "8aa1fd5d-7c58-4a6e-8d50-43f7606173fd",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "377c0607-1cf3-44e2-a988-c4ddd93c20a3",
+    "bpm": 105,
+    "detectedAt": "2026-05-21T13:41:00.108Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "132c213a-cef2-44c2-9d50-98ce5dd89789",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "51c504ed-28bf-4ec1-9ad4-390e8225d961",
+    "bpm": 136,
+    "detectedAt": "2026-05-21T13:41:46.989Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "0e77d8c2-a45c-4d63-bd1c-bf7c9fd1b400",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "8a2c1adf-47f0-4849-a5c1-597dba7aa45a",
+    "bpm": 98,
+    "detectedAt": "2026-05-21T13:58:17.405Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "dcc7b2ae-017a-4a87-9d21-72185970112e",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "4b941571-740b-48d9-bbf2-07f907945c26",
+    "bpm": 111,
+    "detectedAt": "2026-05-21T14:44:04.494Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "94beba77-4be6-4c95-9da6-054a97f1d3a7",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "80adf2f5-4829-4d44-90d2-381fed12de39",
+    "bpm": 94,
+    "detectedAt": "2026-05-21T14:44:44.571Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "c47cfb65-3d9e-4d0d-a548-eed30299b93e",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "d45c2277-227a-46fd-aef2-fe0556f53b60",
+    "bpm": 78,
+    "detectedAt": "2026-05-22T02:57:42.112Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "b0054288-42ca-4c2b-a112-0b666751c57b",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "c80ee8a0-144d-4062-abc6-efd7a6a49743",
+    "bpm": 98,
+    "detectedAt": "2026-05-22T02:58:14.057Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "0f2c998e-453b-4800-87c3-0f4a48e341b7",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "982b1644-4cd7-435e-ad88-bc1ac2a5663e",
+    "bpm": 68,
+    "detectedAt": "2026-05-22T03:05:24.104Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "26dea604-65ae-409f-96ca-f0c85076d2c6",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "114939bf-95cd-4a1e-84cc-5f5acbae2b5d",
+    "bpm": 56,
+    "detectedAt": "2026-05-22T03:12:42.379Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "0aeaf7c5-8bca-4240-bfc9-f64f9fe91c85",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "5355860e-0c61-449d-8568-dd196014b87a",
+    "bpm": 74,
+    "detectedAt": "2026-05-22T03:13:25.872Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "643856c7-c2b1-4a9a-a656-a3d10dfc2716",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "fe72b47c-6b6b-49d4-be15-9e017b61242e",
+    "bpm": 63,
+    "detectedAt": "2026-05-22T03:14:11.704Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "ceee1f60-8e32-45f1-b6b5-bd2b05851ce7",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "ea1f58bc-a52a-4754-aac6-92e05fb0973d",
+    "bpm": 65,
+    "detectedAt": "2026-05-22T03:15:08.278Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "acd3caa4-f39d-479e-94c8-497cbdd3badd",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "4e09331b-c117-4d34-83a7-6c3216f4552b",
+    "bpm": 56,
+    "detectedAt": "2026-05-22T03:16:11.060Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "e6c438f0-cb31-42a9-ac65-ee1ab219af21",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "28400f24-3169-4694-b5ac-d842026c52a0",
+    "bpm": 78,
+    "detectedAt": "2026-05-22T03:29:14.777Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "cf4a3618-aa91-40d2-9b83-f6e4baba34d7",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "81eb46c0-8aca-4d7d-985d-1927dc710c7f",
+    "bpm": 86,
+    "detectedAt": "2026-05-22T03:30:05.542Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "63301e2b-45f4-4ea5-993b-2e9141170219",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "3eb8e8f5-63e8-4229-8372-9900fd2d49a7",
+    "bpm": 81,
+    "detectedAt": "2026-05-22T03:37:49.040Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "219deedb-f8ef-46dd-95a0-d0eaf48650be",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "ca9158d9-faae-4687-ad98-daa9ff08ba83",
+    "bpm": 89,
+    "detectedAt": "2026-05-22T03:41:00.202Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "ec54b9ed-0e1d-4a10-b305-d1c88439861f",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "bb90a74b-3f97-44bb-a34a-7cf9782058a4",
+    "bpm": 90,
+    "detectedAt": "2026-05-22T03:51:42.524Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "fa21168b-ebc4-4553-9bec-b9af995baeb1",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "838fd4c4-8838-4c32-8394-7e68b7b93226",
+    "bpm": 66,
+    "detectedAt": "2026-05-22T03:55:17.456Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "16664f8b-0151-433c-8368-17e5d433568a",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "7598c7fc-8a73-47c9-b0ed-ae71b277cd35",
+    "bpm": 77,
+    "detectedAt": "2026-05-22T04:21:46.036Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "c5db323c-e5f1-424a-bafb-b05233d62ae8",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "4dd7b4aa-1891-4d47-b7d6-a6ed82d5195b",
+    "bpm": 80,
+    "detectedAt": "2026-05-22T07:40:59.783Z",
+    "duration": null,
+    "status": "detected"
+  },
+  {
+    "id": "c177cd15-9bea-44a3-9cc0-aa5c373ed632",
+    "userId": "972b5779-627f-4f09-9987-09a5467a702d",
+    "measurementId": "78a7bfdc-6c45-49a6-aece-263c4233c34c",
+    "bpm": 77,
+    "detectedAt": "2026-05-22T07:51:44.332Z",
+    "duration": null,
+    "status": "detected"
+  }
+]
