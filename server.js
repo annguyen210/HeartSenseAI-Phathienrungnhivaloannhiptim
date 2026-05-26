@@ -199,7 +199,8 @@ function requestJson(urlString, options = {}) {
       let buffer = "";
       response.on("data", (chunk) => { buffer += chunk.toString(); });
       response.on("end", () => {
-        const parsed = buffer ? JSON.parse(buffer) : {};
+        let parsed = {};
+        try { parsed = buffer ? JSON.parse(buffer) : {}; } catch { parsed = {}; }
         if (response.statusCode >= 400) { reject(new Error(parsed.message || `HTTP ${response.statusCode}`)); return; }
         resolve(parsed);
       });
