@@ -205,6 +205,7 @@ function requestJson(urlString, options = {}) {
         resolve(parsed);
       });
     });
+    request.setTimeout(6000, () => { request.destroy(); reject(new Error("Request timeout")); });
     request.on("error", reject);
     if (options.body) request.write(options.body);
     request.end();
