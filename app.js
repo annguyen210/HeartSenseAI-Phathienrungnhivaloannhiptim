@@ -1317,12 +1317,49 @@ async function saveSymptom(event) {
   } catch (err) { setAuthState(err.message, "error"); }
 }
 
-function hydrateMedicineNameFromFile() {
+async function hydrateMedicineNameFromFile() {
   const file = el.labelImageInput.files[0];
   if (!file) return;
-  const name = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
-  el.medicineNameInput.value = name;
-  el.ocrStatus.textContent = `Tên thuốc đọc từ file: "${name}". Chỉnh lại nếu cần.`;
+
+  if (typeof Tesseract === "undefined") {
+    const name = file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+    el.medicineNameInput.value = name;
+    el.ocrStatus.textContent = `Tên thuốc đọc từ tên file: "${name}". Chỉnh lại nếu cần.`;
+    return;
+  }
+
+  el.ocrStatus.textContent = "Đang nhận dạng chữ trên nhãn thuốc...";
+  el.ocrStatus.className = "muted";
+
+  try {
+    const result = await Tesseract.recognize(file, "vie+eng", {
+      logger: (m) => {
+        if (m.status === "recognizing text") {
+          const pct = Math.round((m.progress || 0) * 100);
+          el.ocrStatus.textContent = `Đang quét: ${pct}%...`;
+        }
+      },
+    });
+
+    const raw = result.data.text || "";
+    const lines = raw.split("\n").map(l => l.trim()).filter(l => l.length > 2);
+
+    // Look for a line that looks like a medicine name: contains letters, possibly numbers (dosage)
+    const medicineLine = lines.find(l => /[a-zA-ZÀ-ỹ]{3,}/.test(l) && l.length < 80)
+      || lines[0]
+      || "";
+
+    const name = medicineLine.replace(/[^a-zA-ZÀ-ỹ0-9\s.,-]/g, " ").replace(/\s+/g, " ").trim();
+
+    if (name) {
+      el.medicineNameInput.value = name;
+      el.ocrStatus.textContent = `OCR đọc được: "${name}". Chỉnh lại nếu cần.`;
+    } else {
+      el.ocrStatus.textContent = "Không đọc được chữ rõ. Nhập tên thuốc thủ công.";
+    }
+  } catch {
+    el.ocrStatus.textContent = "Lỗi OCR. Nhập tên thuốc thủ công.";
+  }
 }
 
 async function saveReminder(event) {
