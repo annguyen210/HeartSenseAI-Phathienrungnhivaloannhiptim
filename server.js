@@ -10,7 +10,7 @@ const DATA_DIR = path.join(ROOT, "data");
 const RESEND_API_BASE_URL = process.env.RESEND_API_BASE_URL || "https://api.resend.com/emails";
 const WEATHER_DEFAULT_QUERY = process.env.WEATHER_DEFAULT_QUERY || "Bac Ninh,VN";
 const EMAIL_FROM = process.env.EMAIL_FROM || "HEARTSENSE <onboarding@resend.dev>";
-if (!process.env.RESEND_API_KEY) process.env.RESEND_API_KEY = "re_bUL488Jt_JLhT6Qyk1xdpphgUh5Lv1q4E";
+if (!process.env.RESEND_API_KEY) console.warn("[WARN] RESEND_API_KEY chưa được set — email sẽ không gửi được.");
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -589,13 +589,13 @@ function analyzeMeasurement({ user, type, payload }) {
   // strokeRiskScore phản ánh nguy cơ đột quỵ tổng thể (tuổi, bệnh nền, huyết áp...)
   // AFib chỉ được xác nhận khi tín hiệu nhịp tim thực sự bất thường.
   const clientAfibFlag = Boolean(payload.afibLikelihood); // kết quả từ thuật toán POS+ACF phía client
-  const qualityForAfib = signalQuality >= 70; // đồng bộ với client — cả hai cần 70%
-  // AFib mạnh: ngưỡng rất cao, không cần client confirm
-  const strongAfib = qualityForAfib && cv > 0.35 && pnn50 > 48 && irregularityIndex >= 70
-    && estimatedBpm >= 50 && estimatedBpm <= 150; // BPM phải hợp lý
-  // AFib xác nhận: client flag + server threshold + BPM hợp lý
-  const moderateAfib = qualityForAfib && clientAfibFlag && cv > 0.28 && pnn50 > 40
-    && irregularityIndex >= 65 && estimatedBpm >= 50 && estimatedBpm <= 150;
+  const qualityForAfib = signalQuality >= 65; // hạ từ 70 → 65 để không bỏ sót AFib trên webcam laptop
+  // AFib mạnh: không cần client confirm — ngưỡng cao nhưng đủ thực tế
+  const strongAfib = qualityForAfib && cv > 0.28 && pnn50 > 40 && irregularityIndex >= 65
+    && estimatedBpm >= 50 && estimatedBpm <= 150;
+  // AFib xác nhận: client flag + server threshold
+  const moderateAfib = qualityForAfib && clientAfibFlag && cv > 0.22 && pnn50 > 30
+    && irregularityIndex >= 58 && estimatedBpm >= 50 && estimatedBpm <= 150;
 
   let classification = "normal";
   if (strongAfib || moderateAfib) {
@@ -1050,8 +1050,8 @@ function handleLogin(body, res) {
   sendJson(res, 200, { token, user: summarizeUser(user) });
 }
 
-function handleSession(urlObject, res) {
-  const session = getSessionFromRequest(urlObject);
+function handleSession(urlObject, body, res) {
+  const session = getSessionFromRequest(urlObject, body);
   const user = getUserBySession(session);
   if (!user) { sendJson(res, 401, { error: "Session không hợp lệ." }); return; }
   sendJson(res, 200, { user: summarizeUser(user) });
@@ -1207,13 +1207,21 @@ async function handleTriggerSos(urlObject, body, res) {
   const session = getSessionFromRequest(urlObject, body);
   const user = getUserBySession(session);
   if (!user) { sendJson(res, 401, { error: "Cần đăng nhập." }); return; }
+
+  // Chống double-trigger: nếu đã có SOS trong vòng 30 giây thì không gửi lại
+  const sosEvents = readJson("sos");
+  const recentSos = sosEvents.find(e => e.userId === user.id && e.status === "triggered"
+    && Date.now() - new Date(e.createdAt).getTime() < 30000);
+  if (recentSos) {
+    sendJson(res, 200, { sos: recentSos, messages: ["SOS đã được gửi trước đó (trong vòng 30 giây)."], dashboard: await buildDashboard(user.id) });
+    return;
+  }
+
   const guardian = user.guardian || {};
   const channelSet = new Set();
   if (guardian.guardianPhone) { channelSet.add("sms"); channelSet.add("zalo"); }
   if (guardian.guardianEmail) channelSet.add("email");
   channelSet.add("web-notification");
-
-  const sosEvents = readJson("sos");
   const emailResult = await sendResendEmail({
     to: guardian.guardianEmail,
     subject: `🚨 HEARTSENSE SOS KHẨN CẤP – ${user.fullName}`,
@@ -1260,8 +1268,8 @@ async function handleCancelSos(urlObject, body, res) {
   sendJson(res, 200, { ok: true, dashboard: await buildDashboard(user.id) });
 }
 
-async function handleDashboard(urlObject, res, userId) {
-  const session = getSessionFromRequest(urlObject);
+async function handleDashboard(urlObject, body, res, userId) {
+  const session = getSessionFromRequest(urlObject, body);
   if (!session || session.userId !== userId) { sendJson(res, 401, { error: "Khong du quyen." }); return; }
   const dashboard = await buildDashboard(userId);
   if (!dashboard) { sendJson(res, 404, { error: "Khong tim thay nguoi dung." }); return; }
@@ -1408,7 +1416,7 @@ async function handleRequest(req, res) {
   }
   if (req.method === "POST" && p === "/api/auth/register") { handleRegister(await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/auth/login") { handleLogin(await parseBody(req), res); return; }
-  if (req.method === "GET" && p === "/api/session") { handleSession(urlObject, res); return; }
+  if (p === "/api/session" && (req.method === "GET" || req.method === "POST")) { handleSession(urlObject, req.method === "POST" ? await parseBody(req) : {}, res); return; }
   if (req.method === "PUT" && p === "/api/guardian") { handleGuardian(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/measurements") { await handleCreateMeasurement(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/measurements/context") { await handleMeasurementContext(urlObject, await parseBody(req), res); return; }
@@ -1422,7 +1430,7 @@ async function handleRequest(req, res) {
   if (req.method === "POST" && p === "/api/pill-protocol") { await handleSavePillProtocol(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/export-token") { await handleGenerateExportToken(urlObject, await parseBody(req), res); return; }
 
-  if (req.method === "GET" && p.startsWith("/api/users/") && p.endsWith("/dashboard")) { await handleDashboard(urlObject, res, p.split("/")[3]); return; }
+  if ((req.method === "GET" || req.method === "POST") && p.startsWith("/api/users/") && p.endsWith("/dashboard")) { const b = req.method === "POST" ? await parseBody(req) : {}; await handleDashboard(urlObject, b, res, p.split("/")[3]); return; }
   if (req.method === "GET" && p.startsWith("/api/users/") && p.endsWith("/report")) { await handleReport(urlObject, res, p.split("/")[3]); return; }
   if (req.method === "GET" && p.startsWith("/api/users/") && p.endsWith("/doctor-export")) { await handleDoctorExport(urlObject, res, p.split("/")[3]); return; }
   if (req.method === "POST" && p.startsWith("/api/users/") && p.endsWith("/remote-parent/send")) { await handleSendRemoteParentReport(urlObject, await parseBody(req), res); return; }

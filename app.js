@@ -2,7 +2,7 @@
 const HEARTSENSE_TOKEN_KEY = "heartsense_token";
 const MEASUREMENT_SECONDS = 30;
 const BREATHING_SECONDS = 60;
-const DASHBOARD_POLL_MS = 60000; // 60s thay vì 20s — giảm tải Render Free tier
+const DASHBOARD_POLL_MS = 90000; // 90s — giảm tải Render Free tier, kết hợp visibilitychange
 const TARGET_FPS = 30;
 
 const state = {
@@ -14,7 +14,7 @@ const state = {
   sosTimer: null, sosRemaining: 15, breathingInterval: null, breathingTimeout: null,
   dashboardPoll: null, audioContext: null, modalConfirm: null,
   afibConfirmMode: false, measurementFps: 30,
-  torchOn: false, // trạng thái đèn flash
+  torchOn: false, sosSending: false, // sosSending: chống double-trigger SOS
 };
 
 // ─── Element refs ─────────────────────────────────────────────────────────────
@@ -482,15 +482,15 @@ function analyzePPGSignal(rawSamples, mode, fps) {
     methodAgreement + (mode === "finger" ? 12 : 0)
   )));
 
-  // ═══ AFib detection — 6 điều kiện, ưu tiên tránh false positive ════════════
-  const qualityGate = mode === "finger" ? 70 : 70; // nâng lên 70 cho cả hai
+  // ═══ AFib detection — 6 điều kiện, cân bằng sensitivity / specificity ═══════
+  const qualityGate = mode === "finger" ? 65 : 65; // hạ từ 70 → 65 để không bỏ sót AFib trên webcam/laptop
   const afibLikelihood = (
-    signalQuality >= qualityGate &&       // 1. Tín hiệu tốt (≥ 70%)
+    signalQuality >= qualityGate &&       // 1. Tín hiệu đủ tốt (≥ 65%)
     rrIntervals.length >= 10 &&           // 2. Đủ ≥10 khoảng RR
-    bpm >= 50 && bpm <= 150 &&            // 3. BPM trong phạm vi hợp lý (không phải giá trị sai)
-    cv > 0.28 &&                          // 4. Biến thiên nhịp cao
-    pnn50 > 40 &&                         // 5. Nhiều khoảng lệch >50ms
-    sdnn > 60                             // 6. SDNN cao
+    bpm >= 50 && bpm <= 150 &&            // 3. BPM trong phạm vi hợp lý
+    cv > 0.22 &&                          // 4. Biến thiên nhịp cao (hạ từ 0.28 → 0.22)
+    pnn50 > 30 &&                         // 5. Nhiều khoảng lệch >50ms (hạ từ 40 → 30)
+    sdnn > 45                             // 6. SDNN cao (hạ từ 60 → 45ms)
   );
   const afibScore = Math.round(Math.min(85, cv * 240 + (pnn50 > 40 ? 14 : 0) + (sdnn > 80 ? 8 : 0)));
 
@@ -1226,10 +1226,11 @@ function renderDashboard(dashboard) {
 async function loadDashboard(showError = false) {
   if (!state.user || !state.token) return;
   try {
-    const d = await api(`/api/users/${state.user.id}/dashboard?token=${encodeURIComponent(state.token)}`);
+    const d = await api(`/api/users/${state.user.id}/dashboard`, {
+      method: "POST", body: JSON.stringify({ token: state.token })
+    });
     renderDashboard(d);
   } catch (err) {
-    // Chỉ hiện lỗi khi người dùng bấm nút refresh thủ công, không hiện khi auto-poll
     if (showError) setAuthState(err.message, "error");
   }
 }
@@ -1237,13 +1238,16 @@ async function loadDashboard(showError = false) {
 function startDashboardPolling() {
   if (state.dashboardPoll) clearInterval(state.dashboardPoll);
   if (!state.token || !state.user) return;
-  state.dashboardPoll = setInterval(() => loadDashboard().catch(() => {}), DASHBOARD_POLL_MS);
+  // Chỉ poll khi tab đang active — tiết kiệm tài nguyên Render free tier
+  state.dashboardPoll = setInterval(() => {
+    if (!document.hidden) loadDashboard().catch(() => {});
+  }, DASHBOARD_POLL_MS);
 }
 
 async function restoreSession() {
   if (!state.token) { setAuthState("Chưa đăng nhập."); return; }
   try {
-    const data = await api(`/api/session?token=${encodeURIComponent(state.token)}`);
+    const data = await api("/api/session", { method: "POST", body: JSON.stringify({ token: state.token }) });
     state.user = data.user;
     setAuthState(`Đang đăng nhập: ${data.user.fullName}`);
     await loadDashboard();
@@ -1361,6 +1365,8 @@ function startSosCountdown(reason) {
 
 async function triggerSos(reason = "Người dùng kích hoạt") {
   if (!state.token) { setAuthState("Cần đăng nhập để kích hoạt SOS.", "error"); return; }
+  if (state.sosSending) return; // chống double-trigger
+  state.sosSending = true;
   try {
     const r = await api("/api/sos/trigger", { method: "POST", body: JSON.stringify({ token: state.token, reason }) });
     el.sosBadge.textContent = "SOS đã gửi"; el.sosBadge.className = "badge danger";
@@ -1368,6 +1374,7 @@ async function triggerSos(reason = "Người dùng kích hoạt") {
     notify("HEARTSENSE", "SOS đã gửi.");
     playAlarmTone(); renderDashboard(r.dashboard);
   } catch (err) { setAuthState(err.message, "error"); }
+  finally { setTimeout(() => { state.sosSending = false; }, 5000); }
 }
 
 async function cancelSos() {
@@ -1562,5 +1569,10 @@ async function init() {
   setMeasurementMode("finger");
   await checkHealth(); await loadCameraDevices(); await restoreSession();
 }
+
+// Khi người dùng quay lại tab → load dashboard ngay thay vì đợi poll tiếp theo
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && state.token && state.user) loadDashboard().catch(() => {});
+});
 
 init();
