@@ -1435,7 +1435,11 @@ initDataStore().then(() => {
       sendJson(res, 500, { error: "Server error", detail: err.message });
     });
   }).listen(PORT, () => {
+    const { networkInterfaces } = require("os");
+    const nets = networkInterfaces();
+    const localIp = Object.values(nets).flat().find(n => n.family === "IPv4" && !n.internal)?.address || "unknown";
     console.log(`HEARTSENSE v4.0 running at http://localhost:${PORT}`);
+    console.log(`Local network:             http://${localIp}:${PORT}`);
     console.log(`Storage: ${USE_SUPABASE ? "Supabase ☁️ (persistent)" : "Local files 📁 (ephemeral)"}`);
   });
 });
