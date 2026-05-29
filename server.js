@@ -1,3 +1,4 @@
+require("dotenv").config();
 const http = require("http");
 const https = require("https");
 const fs = require("fs");
@@ -52,6 +53,28 @@ const DEFAULTS = {
   exportTokens: [],
 };
 
+// ─── Vietnamese Diacritics Normalizer (BUG#2 fix) ────────────────────────────
+function normalizeVi(str) {
+  return String(str || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// ─── HTML Sanitizer (improvement #18) ────────────────────────────────────────
+function escHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ─── Drug Interaction Database ────────────────────────────────────────────────
 const DRUG_GENERIC_MAP = {
   warfarin: "warfarin", coumadin: "warfarin",
@@ -77,6 +100,13 @@ const DRUG_GENERIC_MAP = {
   clopidogrel: "clopidogrel", plavix: "clopidogrel",
   bisoprolol: "bisoprolol", concor: "bisoprolol",
   carvedilol: "carvedilol", coreg: "carvedilol",
+  // Vietnamese/herbal medicines
+  "ginkgo biloba": "ginkgo", "bach qua": "ginkgo", "bạch quả": "ginkgo", ginkgo: "ginkgo",
+  "dan sam": "danshen", "đan sâm": "danshen", danshen: "danshen",
+  "toi": "garlic", "tỏi": "garlic", "garlic extract": "garlic", garlic: "garlic",
+  "gung": "ginger", "gừng": "ginger", ginger: "ginger",
+  "coq10": "coq10", "coenzyme q10": "coq10",
+  "ha thu o": "heshouwu", "hà thủ ô": "heshouwu",
 };
 
 const INTERACTION_PAIRS = [
@@ -99,10 +129,55 @@ const INTERACTION_PAIRS = [
   { a: "amiodarone", b: "metoprolol", sev: "NGUY_HIEM", fx: "Chậm nhịp và tụt huyết áp nghiêm trọng khi phối hợp." },
   { a: "amiodarone", b: "bisoprolol", sev: "NGUY_HIEM", fx: "Chậm nhịp nghiêm trọng. Theo dõi ECG liên tục nếu cần dùng." },
   { a: "amlodipine", b: "atorvastatin", sev: "NHE", fx: "Có thể tăng nhẹ nồng độ atorvastatin. Thông thường an toàn, theo dõi nếu có đau cơ." },
+  // Vietnamese herbal medicine interactions (#17, #37)
+  { a: "warfarin", b: "ginkgo", sev: "NGUY_HIEM", fx: "Bạch quả (Ginkgo biloba) tăng nguy cơ chảy máu nghiêm trọng khi dùng với warfarin. Tránh kết hợp." },
+  { a: "warfarin", b: "danshen", sev: "NGUY_HIEM", fx: "Đan sâm làm tăng tác dụng chống đông của warfarin. Nguy cơ chảy máu cao. Không kết hợp." },
+  { a: "warfarin", b: "garlic", sev: "VUA", fx: "Tỏi/Garlic extract tăng nhẹ tác dụng chống đông. Theo dõi INR nếu dùng liều cao." },
+  { a: "warfarin", b: "ginger", sev: "VUA", fx: "Gừng liều cao có thể tăng tác dụng chống đông warfarin. Hỏi bác sĩ." },
+  { a: "aspirin", b: "ginkgo", sev: "VUA", fx: "Bạch quả tăng nguy cơ chảy máu khi kết hợp với aspirin." },
+  { a: "aspirin", b: "garlic", sev: "NHE", fx: "Tỏi liều cao có thể tăng nhẹ tác dụng chống kết tập tiểu cầu của aspirin." },
+  { a: "warfarin", b: "coq10", sev: "VUA", fx: "CoQ10 có thể làm giảm hiệu quả của warfarin. Cần theo dõi INR chặt chẽ." },
+  { a: "clopidogrel", b: "ginkgo", sev: "VUA", fx: "Bạch quả + clopidogrel tăng nguy cơ chảy máu. Tránh kết hợp." },
+  { a: "metoprolol", b: "danshen", sev: "VUA", fx: "Đan sâm có thể tăng tác dụng hạ huyết áp và làm chậm nhịp tim." },
+  { a: "digoxin", b: "danshen", sev: "NGUY_HIEM", fx: "Đan sâm tăng nồng độ digoxin trong máu, nguy cơ ngộ độc tim." },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function cloneDefault(key) { return JSON.parse(JSON.stringify(DEFAULTS[key])); }
+
+// ─── Rate Limiting (#19) ──────────────────────────────────────────────────────
+const _loginAttempts = new Map(); // email -> { count, firstAt }
+function checkLoginRateLimit(email) {
+  const now = Date.now();
+  const entry = _loginAttempts.get(email);
+  if (!entry) return true;
+  if (now - entry.firstAt > 15 * 60 * 1000) { _loginAttempts.delete(email); return true; }
+  return entry.count < 5;
+}
+function recordLoginFailure(email) {
+  const now = Date.now();
+  const entry = _loginAttempts.get(email);
+  if (!entry || now - entry.firstAt > 15 * 60 * 1000) {
+    _loginAttempts.set(email, { count: 1, firstAt: now });
+  } else {
+    entry.count++;
+  }
+}
+function clearLoginAttempts(email) { _loginAttempts.delete(email); }
+
+// ─── Session TTL constants (#8) ────────────────────────────────────────────────
+const SESSION_TTL_MS = 30 * 86400 * 1000; // 30 days
+function isSessionValid(session) {
+  if (!session) return false;
+  if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) return false;
+  return true;
+}
+function cleanupExpiredSessions() {
+  const sessions = readJson("sessions");
+  const now = Date.now();
+  const valid = sessions.filter(s => !s.expiresAt || new Date(s.expiresAt).getTime() > now);
+  if (valid.length !== sessions.length) writeJson("sessions", valid);
+}
 
 // ─── Supabase Storage Layer ───────────────────────────────────────────────────
 // Khi SUPABASE_URL + SUPABASE_SERVICE_KEY được set → dùng Supabase (persistent)
@@ -158,7 +233,13 @@ function writeJson(key, value) {
   if (USE_SUPABASE) {
     sbSet(key, value); // async fire-and-forget — không block response
   } else {
-    try { fs.writeFileSync(DATA_FILES[key], JSON.stringify(value, null, 2)); } catch {}
+    // Atomic write: write to .tmp then rename (#14)
+    try {
+      const filePath = DATA_FILES[key];
+      const tmpPath = filePath + ".tmp";
+      fs.writeFileSync(tmpPath, JSON.stringify(value, null, 2));
+      fs.renameSync(tmpPath, filePath);
+    } catch {}
   }
 }
 
@@ -251,7 +332,8 @@ function summarizeUser(user) {
 function getSessionFromRequest(urlObject, body = {}) {
   const token = body.token || urlObject.searchParams.get("token");
   if (!token) return null;
-  return readJson("sessions").find((item) => item.token === token) || null;
+  const session = readJson("sessions").find((item) => item.token === token) || null;
+  return isSessionValid(session) ? session : null;
 }
 
 function getUserBySession(session) {
@@ -287,6 +369,21 @@ function getProviderStatus() {
 }
 
 // ─── Email ────────────────────────────────────────────────────────────────────
+async function sendResendEmailWithRetry(opts, maxRetries = 3) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await sendResendEmail(opts);
+      if (result.sent) return { ...result, attempts: attempt };
+      lastErr = result.reason;
+    } catch (e) {
+      lastErr = e.message;
+      if (attempt < maxRetries) await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
+    }
+  }
+  return { sent: false, provider: "resend", reason: lastErr, attempts: maxRetries };
+}
+
 async function sendResendEmail({ to, subject, html }) {
   if (!process.env.RESEND_API_KEY || !to) {
     return { sent: false, provider: "resend", reason: !process.env.RESEND_API_KEY ? "missing_api_key" : "missing_recipient" };
@@ -298,6 +395,133 @@ async function sendResendEmail({ to, subject, html }) {
     body: payload,
   });
   return { sent: true, provider: "resend", id: response.id || null };
+}
+
+function buildReportEmailHtml(user, latest, status, dashboard, personalMessage = "") {
+  const r = latest?.result;
+  const isAfib = r?.classification === "afib";
+  const isElevated = r?.classification === "elevated";
+  const bannerColor = isAfib ? "#cc2244" : isElevated ? "#d97706" : "#059669";
+  const bannerLabel = isAfib ? "⚠️ PHÁT HIỆN AFIB – CẦN CHÚ Ý NGAY" : isElevated ? "⚡ CHỈ SỐ CAO – NÊN THEO DÕI THÊM" : "✅ SỨC KHOẺ BÌNH THƯỜNG";
+  const safetyMsg = isAfib
+    ? `Phát hiện rung nhĩ (AFib). Đây là tình trạng cần theo dõi y tế. Hãy liên hệ ngay với ${user.fullName} để xác nhận tình trạng và cân nhắc gặp bác sĩ.`
+    : isElevated
+    ? `Nhịp tim hoặc chỉ số nguy cơ cao hơn bình thường. Không khẩn cấp nhưng nên nhắc ${user.fullName} nghỉ ngơi và đo lại sau 30 phút.`
+    : `Tất cả chỉ số trong giới hạn an toàn. ${user.fullName} đang có sức khoẻ tim mạch ổn định.`;
+  const riskColor = (r?.strokeRiskScore || 0) >= 70 ? "#cc2244" : (r?.strokeRiskScore || 0) >= 40 ? "#d97706" : "#059669";
+  const weekly = dashboard.weeklyReport || {};
+  return `<div style="font-family:Arial,sans-serif;padding:24px;max-width:520px;background:#fff">
+    <div style="background:${bannerColor};color:#fff;padding:14px 18px;border-radius:10px;text-align:center;font-size:16px;font-weight:bold;margin-bottom:18px">
+      ${bannerLabel}
+    </div>
+    <h3 style="color:#10233f;margin:0 0 4px">HEARTSENSE – Báo cáo sức khoẻ</h3>
+    <p style="color:#555;margin:0 0 16px;font-size:13px">Người được giám sát: <strong>${user.fullName}</strong> (${user.age} tuổi) &nbsp;·&nbsp; ${new Date().toLocaleString("vi-VN")}</p>
+    ${r ? `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div style="background:#f0f9ff;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:28px;font-weight:bold;color:#10233f">${r.bpm}</div>
+        <div style="font-size:12px;color:#666">Nhịp tim (BPM)</div>
+      </div>
+      <div style="background:#f0f9ff;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:28px;font-weight:bold;color:${riskColor}">${r.strokeRiskScore}%</div>
+        <div style="font-size:12px;color:#666">Nguy cơ đột quỵ</div>
+      </div>
+      <div style="background:#f8fafc;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:22px;font-weight:bold;color:#10233f">${r.sdnn || r.hrvScore || "--"}</div>
+        <div style="font-size:12px;color:#666">HRV (SDNN)</div>
+      </div>
+      <div style="background:#f8fafc;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:22px;font-weight:bold;color:#10233f">${r.confidence ? Math.round(r.confidence * 100) + "%" : "--"}</div>
+        <div style="font-size:12px;color:#666">Độ tin cậy AI</div>
+      </div>
+    </div>
+    <div style="background:#fffbeb;border-left:4px solid ${bannerColor};padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:16px;font-size:14px;color:#333">
+      ${safetyMsg}
+    </div>
+    <p style="font-size:12px;color:#888;margin:0 0 16px">⏱ Lần đo gần nhất: ${new Date(latest.createdAt).toLocaleString("vi-VN")}</p>
+    ` : `<p style="color:#888;margin-bottom:16px">Chưa có lần đo nào hôm nay. Hãy nhắc <strong>${user.fullName}</strong> đo tim!</p>`}
+    ${weekly.totalMeasurements > 0 ? `
+    <div style="background:#f8fafc;padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px">
+      <strong style="display:block;margin-bottom:6px;color:#10233f">📊 Tóm tắt 7 ngày qua</strong>
+      <span style="margin-right:16px">📋 ${weekly.totalMeasurements} lần đo</span>
+      <span style="margin-right:16px">💓 TB ${weekly.averageBpm} BPM</span>
+      <span style="color:${(weekly.afibAlerts || 0) > 0 ? "#cc2244" : "#059669"}">⚡ ${weekly.afibAlerts || 0} cảnh báo AFib</span>
+      ${weekly.summary ? `<p style="margin:6px 0 0;color:#555">${weekly.summary}</p>` : ""}
+    </div>` : ""}
+    ${personalMessage ? `
+    <div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:16px">
+      <p style="margin:0 0 4px;font-size:12px;color:#92400e;font-weight:600">💬 Lời nhắn từ ${user.fullName}</p>
+      <p style="margin:0;font-size:14px;color:#333;white-space:pre-wrap">${personalMessage.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
+    </div>` : ""}
+    <p style="color:#999;font-size:11px;margin:0;text-align:center">HEARTSENSE – Mắt thần cho con xa.</p>
+  </div>`;
+}
+
+function buildMeasurementEmailHtml(user, record, dashboard) {
+  const r = record.result;
+  const cls = r.classification;
+  const isAfib = cls === "afib";
+  const isElevated = cls === "elevated";
+  const statusColor = isAfib ? "#cc2244" : isElevated ? "#d97706" : "#059669";
+  const statusLabel = isAfib ? "⚠️ PHÁT HIỆN AFIB – CẦN CHÚ Ý" : isElevated ? "⚡ CHỈ SỐ CAO – THEO DÕI" : "✅ BÌNH THƯỜNG";
+  const safetyMsg = isAfib
+    ? `Phát hiện rung nhĩ (AFib). Đây là tình trạng cần được theo dõi y tế. Hãy liên hệ ngay với ${user.fullName} để xác nhận tình trạng sức khỏe.`
+    : isElevated
+    ? `Nhịp tim hoặc chỉ số nguy cơ hơi cao so với bình thường. Không phải khẩn cấp nhưng nên theo dõi thêm.`
+    : `Kết quả đo trong giới hạn bình thường. ${user.fullName} đang ổn.`;
+  const riskColor = r.strokeRiskScore >= 70 ? "#cc2244" : r.strokeRiskScore >= 40 ? "#d97706" : "#059669";
+  const weekly = dashboard.weeklyReport || {};
+  return `<div style="font-family:Arial,sans-serif;padding:24px;max-width:520px;background:#fff">
+    <div style="background:${statusColor};color:#fff;padding:14px 18px;border-radius:10px;text-align:center;font-size:16px;font-weight:bold;margin-bottom:18px">
+      ${statusLabel}
+    </div>
+    <h3 style="color:#10233f;margin:0 0 4px">HEARTSENSE – Kết quả đo vừa xong</h3>
+    <p style="color:#555;margin:0 0 16px;font-size:13px">Người được giám sát: <strong>${user.fullName}</strong> (${user.age} tuổi) &nbsp;·&nbsp; ${new Date(record.createdAt).toLocaleString("vi-VN")}</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div style="background:#f0f9ff;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:28px;font-weight:bold;color:#10233f">${r.bpm}</div>
+        <div style="font-size:12px;color:#666">Nhịp tim (BPM)</div>
+      </div>
+      <div style="background:#f0f9ff;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:28px;font-weight:bold;color:${riskColor}">${r.strokeRiskScore}%</div>
+        <div style="font-size:12px;color:#666">Nguy cơ đột quỵ</div>
+      </div>
+      <div style="background:#f8fafc;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:22px;font-weight:bold;color:#10233f">${r.sdnn || r.hrvScore || "--"}</div>
+        <div style="font-size:12px;color:#666">HRV (SDNN)</div>
+      </div>
+      <div style="background:#f8fafc;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:22px;font-weight:bold;color:#10233f">${r.confidence ? Math.round(r.confidence * 100) + "%" : "--"}</div>
+        <div style="font-size:12px;color:#666">Độ tin cậy AI</div>
+      </div>
+    </div>
+    <div style="background:#fffbeb;border-left:4px solid ${statusColor};padding:12px 16px;border-radius:0 8px 8px 0;margin-bottom:16px;font-size:14px;color:#333">
+      ${safetyMsg}
+    </div>
+    ${weekly.totalMeasurements > 0 ? `
+    <div style="background:#f8fafc;padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px">
+      <strong style="display:block;margin-bottom:6px;color:#10233f">Tóm tắt 7 ngày qua</strong>
+      <span style="margin-right:16px">📊 ${weekly.totalMeasurements} lần đo</span>
+      <span style="margin-right:16px">💓 TB ${weekly.averageBpm} BPM</span>
+      <span style="color:${weekly.afibAlerts > 0 ? "#cc2244" : "#059669"}">⚡ ${weekly.afibAlerts} cảnh báo AFib</span>
+    </div>` : ""}
+    <p style="color:#999;font-size:11px;margin:0;text-align:center">HEARTSENSE Mắt thần – Email này được gửi tự động ngay sau khi ${user.fullName} hoàn tất đo.</p>
+  </div>`;
+}
+
+async function sendGuardianMeasurementNotification(user, record, dashboard) {
+  const guardian = user.guardian || {};
+  if (!guardian.guardianEmail || !guardian.reportSchedule?.notifyOnMeasurement) return;
+  try {
+    await sendResendEmail({
+      to: guardian.guardianEmail,
+      subject: `HEARTSENSE – ${user.fullName} vừa đo: ${record.result.classification === "afib" ? "⚠️ CÓ CẢNH BÁO" : record.result.classification === "elevated" ? "⚡ Chỉ số cao" : "✅ Bình thường"} – ${new Date().toLocaleTimeString("vi-VN")}`,
+      html: buildMeasurementEmailHtml(user, record, dashboard),
+    });
+    appendLedgerEntry(user.id, "remote_parent.notify_sent", "Gui thong bao sau do", { classification: record.result.classification });
+  } catch (err) {
+    console.error(`[Notify] Loi gui email: ${err.message}`);
+  }
 }
 
 // ─── Weather (Open-Meteo – no API key required) ───────────────────────────────
@@ -313,7 +537,14 @@ function getWeatherDescription(code) {
   return "không xác định";
 }
 
+const _weatherCache = { data: null, fetchedAt: 0, query: "" };
+const WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 phút
+
 async function fetchOpenMeteoWeather(query) {
+  const now = Date.now();
+  if (_weatherCache.data && _weatherCache.query === query && now - _weatherCache.fetchedAt < WEATHER_CACHE_TTL) {
+    return _weatherCache.data;
+  }
   const cityName = query.split(",")[0].trim();
   const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=vi&format=json`;
   const geoData = await requestJson(geoUrl);
@@ -322,7 +553,11 @@ async function fetchOpenMeteoWeather(query) {
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto`;
   const weatherData = await requestJson(weatherUrl);
   if (!weatherData?.current) return null;
-  return { name: `${name}, ${country}`, temp: weatherData.current.temperature_2m, weatherCode: weatherData.current.weather_code };
+  const result = { name: `${name}, ${country}`, temp: weatherData.current.temperature_2m, weatherCode: weatherData.current.weather_code };
+  _weatherCache.data = result;
+  _weatherCache.fetchedAt = now;
+  _weatherCache.query = query;
+  return result;
 }
 
 function pseudoWeather(user) {
@@ -409,15 +644,15 @@ function calculateAfibBurden(userId, days) {
 
 // ─── Stroke Predictor 72h ─────────────────────────────────────────────────────
 function predictStroke72h(user, measurements) {
-  const conditions = (user.conditions || []).join(" ").toLowerCase();
+  const conditions = normalizeVi((user.conditions || []).join(" "));
   const age = Number(user.age || 60);
 
-  let score = 0; // Stroke risk score accumulator
+  let score = 0;
   if (age >= 75) score += 22;
   else if (age >= 65) score += 14;
   else if (age >= 55) score += 7;
 
-  if (/cao huyet ap|huyet ap cao/.test(conditions)) score += 14;
+  if (/cao huyet ap|huyet ap cao|tang huyet ap/.test(conditions)) score += 14;
   if (/tieu duong|dai thao duong/.test(conditions)) score += 10;
   if (/dot quy|stroke/.test(conditions)) score += 22;
   if (/afib|rung nhi|loai nhip/.test(conditions)) score += 18;
@@ -545,7 +780,7 @@ function generateRecommendations(classification, extras = {}) {
 
 function analyzeMeasurement({ user, type, payload }) {
   const baseline = user.baseline || { sessions: [] };
-  const conditions = (user.conditions || []).join(" ").toLowerCase();
+  const conditions = normalizeVi((user.conditions || []).join(" ")); // BUG#2 fix
   const age = Number(user.age || 60);
   const systolic = clamp(90, Number(payload.systolic || 128), 220);
   const signalQuality = clamp(18, Math.round(Number(payload.signalQuality || 60)), 99);
@@ -558,15 +793,19 @@ function analyzeMeasurement({ user, type, payload }) {
   const rmssd = Number(payload.rmssd || 0);
   const pnn50 = Number(payload.pnn50 || 0);
   const cv = Number(payload.cv || 0);
+  const sampEn = Number(payload.sampEn || 0); // #23 SampEn from client
+  const sd1 = Number(payload.sd1 || 0);       // #24 Poincaré SD1
+  const sd2 = Number(payload.sd2 || 0);       // #24 Poincaré SD2
   const contextNote = String(payload.contextNote || "").trim();
   const waveform = Array.isArray(payload.waveform) ? payload.waveform.slice(0, 120) : [];
   const rrIntervals = Array.isArray(payload.rrIntervals) ? payload.rrIntervals.slice(0, 30) : [];
+  const contextUnchecked = Boolean(payload.contextUnchecked); // #29 pre-measurement checklist
 
   const riskFromConditions =
-    (/cao huyet ap/.test(conditions) ? 16 : 0) +
-    (/tieu duong/.test(conditions) ? 11 : 0) +
-    (/dot quy/.test(conditions) ? 20 : 0) +
-    (/afib/.test(conditions) ? 22 : 0) +
+    (/cao huyet ap|tang huyet ap/.test(conditions) ? 16 : 0) +
+    (/tieu duong|dai thao duong/.test(conditions) ? 11 : 0) +
+    (/dot quy|stroke/.test(conditions) ? 20 : 0) +
+    (/afib|rung nhi/.test(conditions) ? 22 : 0) +
     (/suy tim/.test(conditions) ? 14 : 0);
   const ageRisk = Math.max(0, age - 45) * 0.72;
   const systolicRisk = Math.max(0, systolic - 120) * 0.42;
@@ -576,8 +815,9 @@ function analyzeMeasurement({ user, type, payload }) {
   const baselineHrv = Number(baseline.hrvScore || 42);
   const bpmDelta = Math.abs(estimatedBpm - baselineBpm);
   const hrvDelta = baseline.complete ? Math.abs(hrvScore - baselineHrv) : 0;
-  const contextPenalty = /(stress|ca phe|coffee|met|mat ngu)/i.test(contextNote) ? 4 : 0;
-  const cvBonus = cv > 0.26 ? cv * 24 : 0; // nâng ngưỡng — webcam nhiễu dễ có cv 0.18-0.25
+  const contextPenalty = (/(stress|ca phe|coffee|met|mat ngu)/i.test(contextNote) ? 4 : 0)
+    + (contextUnchecked ? 3 : 0); // #29 adjust for unchecked pre-measurement checklist
+  const cvBonus = cv > 0.26 ? cv * 24 : 0;
 
   const strokeRiskScore = Math.round(clamp(8,
     riskFromConditions + ageRisk + systolicRisk + rhythmRisk + qualityPenalty +
@@ -585,42 +825,58 @@ function analyzeMeasurement({ user, type, payload }) {
     99));
 
   // ═══ Phân loại nhịp tim — bảo thủ, tránh false positive ══════════════════
-  // Lưu ý: strokeRiskScore CAO không có nghĩa là rung nhĩ (AFib)!
-  // strokeRiskScore phản ánh nguy cơ đột quỵ tổng thể (tuổi, bệnh nền, huyết áp...)
-  // AFib chỉ được xác nhận khi tín hiệu nhịp tim thực sự bất thường.
-  const clientAfibFlag = Boolean(payload.afibLikelihood); // kết quả từ thuật toán POS+ACF phía client
-  const qualityForAfib = signalQuality >= 65; // hạ từ 70 → 65 để không bỏ sót AFib trên webcam laptop
-  // AFib mạnh: không cần client confirm — ngưỡng cao nhưng đủ thực tế
-  const strongAfib = qualityForAfib && cv > 0.28 && pnn50 > 40 && irregularityIndex >= 65
+  const clientAfibFlag = Boolean(payload.afibLikelihood);
+  const qualityForAfib = signalQuality >= 65;
+
+  // Adaptive thresholds (#25): use baseline CV std if available
+  const baselineCv = Number(baseline.cvMean || 0);
+  const baselineCvStd = Number(baseline.cvStd || 0);
+  const adaptiveCvThreshold = baseline.complete && baselineCv > 0
+    ? Math.min(0.30, baselineCv + 2 * (baselineCvStd || 0.03))
+    : 0.28;
+  const adaptiveCvModerate = baseline.complete && baselineCv > 0
+    ? Math.min(0.26, baselineCv + 1.5 * (baselineCvStd || 0.03))
+    : 0.22;
+
+  // SampEn + Poincaré boost for AFib confidence (#23, #24)
+  const sampEnBoost = sampEn > 0.9 && cv > 0.20;
+  const poincareBoost = sd2 > 0 && sd1 / sd2 > 0.85;
+
+  const strongAfib = qualityForAfib && cv > adaptiveCvThreshold && pnn50 > 40 && irregularityIndex >= 65
     && estimatedBpm >= 50 && estimatedBpm <= 150;
-  // AFib xác nhận: client flag + server threshold
-  const moderateAfib = qualityForAfib && clientAfibFlag && cv > 0.22 && pnn50 > 30
+  const moderateAfib = qualityForAfib && clientAfibFlag && cv > adaptiveCvModerate && pnn50 > 30
     && irregularityIndex >= 58 && estimatedBpm >= 50 && estimatedBpm <= 150;
+  // Extra: SampEn + Poincaré can push moderate to confirmed (#23, #24)
+  const boostedAfib = qualityForAfib && clientAfibFlag && (sampEnBoost || poincareBoost)
+    && cv > 0.20 && irregularityIndex >= 52 && estimatedBpm >= 50 && estimatedBpm <= 150;
 
   let classification = "normal";
-  if (strongAfib || moderateAfib) {
+  if (strongAfib || moderateAfib || boostedAfib) {
     classification = "afib";
   } else {
-    // ── Phân loại NHỊP TIM — dựa trên tín hiệu đo được, KHÔNG phải nguy cơ nền ──
-    // strokeRiskScore phản ánh nguy cơ đột quỵ tổng thể (tuổi + bệnh nền + huyết áp)
-    // → Ngưỡng 68: chỉ elevated khi có 2+ yếu tố nguy cơ đồng thời nặng (ví dụ: 65 tuổi + huyết áp cao + đái tháo đường)
-    //   Người 60 tuổi có cao huyết áp đơn thuần + nhịp bình thường → "Bình thường" ✓
-    const bpmOutOfRange = estimatedBpm < 46 || estimatedBpm > 118; // nhịp quá chậm hoặc quá nhanh thật sự
-    const bpVeryHigh = systolic >= 150;                            // huyết áp cao đáng kể
-    const rhythmSignificant = irregularityIndex >= 62 && signalQuality >= 55; // loạn nhịp thực đo được
-    const riskVeryHigh = strokeRiskScore >= 68;                    // nguy cơ tổng hợp rất cao (thay vì 42)
-
-    if (bpmOutOfRange || bpVeryHigh || rhythmSignificant || riskVeryHigh) {
+    const bpmOutOfRange = estimatedBpm < 46 || estimatedBpm > 118;
+    const bpVeryHigh = systolic >= 150;
+    const rhythmSignificant = irregularityIndex >= 62 && signalQuality >= 55;
+    const riskVeryHigh = strokeRiskScore >= 68;
+    // Elevate threshold when checklist unchecked (#29)
+    const elevatedThreshold = contextUnchecked ? 72 : 68;
+    if (bpmOutOfRange || bpVeryHigh || rhythmSignificant || strokeRiskScore >= elevatedThreshold) {
       classification = "elevated";
     }
   }
-  // Tín hiệu quá kém → chưa đánh giá được, báo "cần theo dõi" để đo lại
   if (classification === "normal" && signalQuality < 38) classification = "elevated";
 
+  // BUG#1 FIX: Shock Index handled separately — does NOT force AFib classification
   const shockIndex = evaluateShockIndex(estimatedBpm, systolic);
-  if (shockIndex.sos) classification = "afib"; // Shock Index là cấp cứu thật sự
+  // If shock SOS, keep classification as-is but mark shouldTriggerSos=true
 
-  const confidence = Math.round(clamp(40, signalQuality * 0.56 + lightScore * 0.2 + stabilityScore * 0.24 + (rrIntervals.length > 5 ? 8 : 0), 97));
+  // BUG#3 FIX: tách signalQuality và classificationConfidence
+  const signalQualityScore = Math.round(clamp(18, signalQuality, 99));
+  const methodsAgreed = [clientAfibFlag, strongAfib, sampEnBoost, poincareBoost].filter(Boolean).length;
+  const classificationConfidence = Math.round(clamp(40,
+    signalQuality * 0.50 + lightScore * 0.18 + stabilityScore * 0.20
+    + (rrIntervals.length > 5 ? 6 : 0) + methodsAgreed * 4, 97));
+
   const baselineStatus = baseline.complete
     ? `Lệch ${bpmDelta} BPM và ${hrvDelta} điểm HRV so với baseline`
     : "Chưa hoàn thành 3 lần baseline Heart-Print";
@@ -629,8 +885,12 @@ function analyzeMeasurement({ user, type, payload }) {
 
   return {
     type, bpm: estimatedBpm, hrvScore, sdnn, rmssd, pnn50, cv,
+    sampEn, sd1, sd2,
     strokeRiskScore, irregularityIndex, lightScore, stabilityScore,
-    signalQuality, systolic, confidence, classification, baselineStatus,
+    signalQuality: signalQualityScore,
+    confidence: classificationConfidence, // BUG#3: classificationConfidence
+    classificationConfidence,
+    classification, baselineStatus,
     contextNote, recommendation, waveform, rrIntervals, shockIndex,
     shouldTriggerSos: classification === "afib" || shockIndex.sos,
     generatedAt: new Date().toISOString(),
@@ -638,16 +898,53 @@ function analyzeMeasurement({ user, type, payload }) {
 }
 
 // ─── AFib Episode Tracking ────────────────────────────────────────────────────
-function logAfibEpisode(userId, measurementId, bpm, classification, duration = null) {
-  if (classification !== "afib") return null;
+// BUG#1 fix: only log REAL AFib (classification === "afib"), not shock index
+// #38: estimate episode duration by checking prior measurements
+function logAfibEpisode(userId, measurementId, bpm, classification, allMeasurements = []) {
+  if (classification !== "afib") return null; // BUG#1: strict guard
+
   const episodes = readJson("afibEpisodes");
+  const now = new Date();
+
+  // #38: check previous measurements within 24h for duration estimation
+  const sortedMeasurements = [...allMeasurements]
+    .filter(m => m.userId === userId && (m.type === "face" || m.type === "finger"))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  let episodeType = "isolated";
+  let durationHours = null;
+  let firstAfibAt = now.toISOString();
+
+  // Find consecutive prior AFib measurements within 24h
+  const prior = sortedMeasurements.filter(m =>
+    m.result?.classification === "afib" &&
+    now - new Date(m.createdAt) <= 24 * 3600000
+  );
+  if (prior.length > 0) {
+    const oldest = prior[prior.length - 1];
+    firstAfibAt = oldest.createdAt;
+    durationHours = Math.round((now - new Date(oldest.createdAt)) / 3600000 * 10) / 10;
+  }
+
+  // Classify episode type (#38)
+  const allAfibEpisodes = episodes.filter(e => e.userId === userId);
+  const daySpan = allAfibEpisodes.length > 0
+    ? (now - new Date(allAfibEpisodes[0].detectedAt)) / 86400000
+    : 0;
+  if (durationHours !== null) {
+    if (durationHours < 0.5) episodeType = "paroxysmal_short";
+    else if (daySpan < 7) episodeType = "paroxysmal";
+    else if (daySpan < 30) episodeType = "persistent";
+    else episodeType = "long_standing_persistent";
+  }
+
   const episode = {
     id: crypto.randomUUID(),
-    userId,
-    measurementId,
-    bpm,
-    detectedAt: new Date().toISOString(),
-    duration,
+    userId, measurementId, bpm,
+    detectedAt: now.toISOString(),
+    firstAfibAt,
+    durationHours,
+    episodeType,
     status: "detected",
   };
   episodes.push(episode);
@@ -683,15 +980,16 @@ function buildAfibDiseaseSummary(userId) {
 }
 
 // ─── Weekly Report ────────────────────────────────────────────────────────────
-function buildWeeklyReport(userId) {
-  const measurements = readJson("measurements")
+// BUG#4 fix: accept pre-loaded measurements as parameter instead of re-reading
+function buildWeeklyReport(userId, allMeasurements) {
+  const measurements = (allMeasurements || readJson("measurements"))
     .filter((m) => m.userId === userId && (m.type === "face" || m.type === "finger"))
     .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   const last7 = measurements.filter((m) => Date.now() - new Date(m.createdAt).getTime() <= 7 * 86400000);
-  if (!last7.length) return { summary: "Tuan nay chua co du lieu do tim.", averageBpm: null, averageRisk: null, afibAlerts: 0, totalMeasurements: 0, chartPoints: [] };
+  if (!last7.length) return { summary: "Tuần này chưa có dữ liệu đo tim.", averageBpm: null, averageRisk: null, afibAlerts: 0, totalMeasurements: 0, chartPoints: [] };
 
   return {
-    summary: `Tuan nay co ${last7.length} phien do. Nen giu lich do cung khung gio moi sang.`,
+    summary: `Tuần này có ${last7.length} phiên đo. Nên giữ lịch đo cùng khung giờ mỗi sáng.`,
     averageBpm: Math.round(average(last7.map((m) => m.result.bpm || 0))),
     averageRisk: Math.round(average(last7.map((m) => m.result.strokeRiskScore || 0))),
     afibAlerts: last7.filter((m) => m.result.classification === "afib").length,
@@ -700,13 +998,83 @@ function buildWeeklyReport(userId) {
   };
 }
 
+// ─── CHA2DS2-VASc Score (#22) ─────────────────────────────────────────────────
+function calculateCha2ds2Vasc(user) {
+  const age = Number(user.age || 60);
+  const gender = user.gender || "other";
+  const conditions = normalizeVi((user.conditions || []).join(" "));
+  let score = 0;
+  if (age >= 75) score += 2;
+  else if (age >= 65) score += 1;
+  if (gender === "female") score += 1;
+  if (/suy tim/.test(conditions)) score += 1;
+  if (/cao huyet ap|tang huyet ap/.test(conditions)) score += 1;
+  if (/tieu duong|dai thao duong/.test(conditions)) score += 1;
+  if (/dot quy|stroke|tia mau nao/.test(conditions)) score += 2;
+  if (/benh mach mau|xo vu dong mach|nhoimauco/.test(conditions)) score += 1;
+  const riskLevel = score >= 4 ? "CAO" : score >= 2 ? "TRUNG_BINH" : score === 1 ? "THAP" : "RAT_THAP";
+  const anticoagRecommend = score >= 2 && gender !== "female"
+    ? "Nên dùng thuốc chống đông (hỏi bác sĩ)"
+    : score >= 3 && gender === "female"
+    ? "Nên dùng thuốc chống đông (hỏi bác sĩ)"
+    : "Không bắt buộc chống đông thường quy";
+  return { score, riskLevel, anticoagRecommend };
+}
+
+// ─── HASBLED Score (#34) ──────────────────────────────────────────────────────
+function calculateHasbled(user) {
+  const conditions = normalizeVi((user.conditions || []).join(" "));
+  const age = Number(user.age || 60);
+  let score = 0;
+  if (/cao huyet ap|tang huyet ap/.test(conditions)) score += 1;
+  if (/suy than|suy gan/.test(conditions)) score += 1;
+  if (/dot quy|stroke/.test(conditions)) score += 1;
+  if (/chay mau|xuat huyet/.test(conditions)) score += 1;
+  if (age >= 65) score += 1;
+  const riskLevel = score >= 3 ? "CAO" : score >= 2 ? "TRUNG_BINH" : "THAP";
+  return { score, riskLevel, note: score >= 3 ? "Nguy cơ chảy máu cao — cần cân nhắc kỹ trước khi dùng thuốc chống đông" : "" };
+}
+
+// ─── Circadian Pattern (#28) ──────────────────────────────────────────────────
+function buildCircadianPattern(userId, allMeasurements) {
+  const ppg = allMeasurements.filter(m => m.userId === userId && (m.type === "face" || m.type === "finger"));
+  if (ppg.length < 5) return null;
+  const hourMap = {};
+  for (const m of ppg) {
+    const h = new Date(m.createdAt).getHours();
+    if (!hourMap[h]) hourMap[h] = [];
+    hourMap[h].push(m.result?.bpm || 0);
+  }
+  const hours = Object.entries(hourMap).map(([h, bpms]) => ({
+    hour: Number(h),
+    avgBpm: Math.round(average(bpms)),
+    count: bpms.length,
+  })).sort((a, b) => a.hour - b.hour);
+  const peakHour = hours.reduce((best, h) => h.avgBpm > (best?.avgBpm || 0) ? h : best, null);
+  return { hours, peakHour };
+}
+
+// ─── BP Trend (#33) ───────────────────────────────────────────────────────────
+function buildBpTrend(userId, allMeasurements) {
+  const ppg = allMeasurements
+    .filter(m => m.userId === userId && (m.type === "face" || m.type === "finger") && m.result?.systolic)
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+    .slice(-20);
+  if (!ppg.length) return null;
+  const points = ppg.map(m => ({ date: m.createdAt, systolic: m.result.systolic, bpm: m.result.bpm }));
+  const latest = points[points.length - 1];
+  const alert = latest?.systolic >= 180 ? `CẢNH BÁO: Huyết áp ${latest.systolic} mmHg rất cao!` : null;
+  return { points, alert };
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 async function buildDashboard(userId) {
   const users = readJson("users");
   const user = users.find((u) => u.id === userId);
   if (!user) return null;
 
-  const measurements = readJson("measurements").filter((m) => m.userId === userId).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const allMeasurements = readJson("measurements");
+  const measurements = allMeasurements.filter((m) => m.userId === userId).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   const symptoms = readJson("symptoms").filter((m) => m.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const reminders = readJson("reminders").filter((m) => m.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   const sosEvents = readJson("sos").filter((m) => m.userId === userId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -728,6 +1096,12 @@ async function buildDashboard(userId) {
   const pillProtocols = readJson("pillProtocols").filter((p) => p.userId === userId && p.active);
   const pillProtocol = pillProtocols[0] || null;
 
+  // New analytics
+  const cha2ds2 = calculateCha2ds2Vasc(user);
+  const hasbled = calculateHasbled(user);
+  const circadian = buildCircadianPattern(userId, allMeasurements);
+  const bpTrend = buildBpTrend(userId, allMeasurements);
+
   return {
     user: summarizeUser(user),
     measurements: measurements.slice(-8),
@@ -737,7 +1111,7 @@ async function buildDashboard(userId) {
     reminders: reminders.slice(0, 8),
     sosEvents: sosEvents.slice(0, 8),
     ledger,
-    weeklyReport: buildWeeklyReport(userId),
+    weeklyReport: buildWeeklyReport(userId, allMeasurements), // BUG#4 fix: pass measurements
     weatherAlert,
     thermalStrain,
     afibBurden7d,
@@ -745,6 +1119,10 @@ async function buildDashboard(userId) {
     strokePredictor,
     afibDisease,
     pillProtocol,
+    cha2ds2,
+    hasbled,
+    circadian,
+    bpTrend,
     sync: readJson("sync"),
   };
 }
@@ -783,7 +1161,8 @@ function buildEcgSvg(waveform) {
 
 function buildDoctorExportHtml(dashboard, exportToken) {
   const { user, latestMeasurement, weeklyReport, reminders, symptoms, sosEvents,
-    afibBurden7d, afibBurden30d, strokePredictor, afibDisease } = dashboard;
+    afibBurden7d, afibBurden30d, strokePredictor, afibDisease,
+    cha2ds2, hasbled } = dashboard;
 
   // ── Tính toán thống kê từ toàn bộ lịch sử đo ─────────────────────────────
   const allMeasurements = (dashboard.measurements || [])
@@ -991,6 +1370,21 @@ tr:last-child td{border-bottom:none}
   </div>` : ""}
 </div>
 
+<!-- ══ SECTION 5: CHA2DS2-VASc + HASBLED ═════════════════════════════════════ -->
+${cha2ds2 ? `
+<div class="card card-gray">
+  <h2><span class="section-num gray">5</span> Điểm nguy cơ CHA2DS2-VASc &amp; HAS-BLED</h2>
+  <div class="grid4" style="margin-bottom:12px">
+    <div class="metric"><span class="val" style="color:${cha2ds2.score>=4?"#cc2244":cha2ds2.score>=2?"#d97706":"#059669"}">${cha2ds2.score}</span><span class="lbl">CHA2DS2-VASc</span></div>
+    <div class="metric"><span class="val">${cha2ds2.riskLevel}</span><span class="lbl">Mức nguy cơ đột quỵ</span></div>
+    ${hasbled ? `<div class="metric"><span class="val" style="color:${hasbled.score>=3?"#cc2244":"#059669"}">${hasbled.score}</span><span class="lbl">HAS-BLED</span></div>
+    <div class="metric"><span class="val">${hasbled.riskLevel}</span><span class="lbl">Nguy cơ chảy máu</span></div>` : ""}
+  </div>
+  <p style="font-size:12.5px;margin:4px 0"><strong>Khuyến cáo chống đông:</strong> ${cha2ds2.anticoagRecommend}</p>
+  ${hasbled?.note ? `<p style="font-size:12px;color:#cc2244;margin:4px 0">${hasbled.note}</p>` : ""}
+  <p class="note">CHA2DS2-VASc và HAS-BLED là công cụ sàng lọc ban đầu. Quyết định điều trị cần bác sĩ tim mạch.</p>
+</div>` : ""}
+
 <!-- ══ TUYÊN BỐ MIỄN TRỪ TRÁCH NHIỆM Y TẾ ══════════════════════════════════ -->
 <div class="disclaimer">
   <strong>⚕️ Tuyên bố miễn trừ trách nhiệm y tế (Bắt buộc đọc)</strong>
@@ -1032,19 +1426,32 @@ function handleRegister(body, res) {
   writeJson("users", users);
   const sessions = readJson("sessions");
   const token = crypto.randomBytes(24).toString("hex");
-  sessions.push({ token, userId: user.id, createdAt: new Date().toISOString() });
+  // #8: session TTL
+  sessions.push({ token, userId: user.id, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString() });
   writeJson("sessions", sessions);
   appendLedgerEntry(user.id, "auth.register", "Khoi tao tai khoan", { email: user.email });
   sendJson(res, 201, { token, user: summarizeUser(user) });
 }
 
 function handleLogin(body, res) {
+  const email = body.email || "";
+  // #19: rate limiting
+  if (!checkLoginRateLimit(email)) {
+    sendJson(res, 429, { error: "Quá nhiều lần thử đăng nhập. Vui lòng thử lại sau 15 phút." });
+    return;
+  }
   const users = readJson("users");
-  const user = users.find((u) => u.email === body.email);
-  if (!user || !verifyPassword(body.password || "", user.password)) { sendJson(res, 401, { error: "Thông tin đăng nhập không đúng." }); return; }
+  const user = users.find((u) => u.email === email);
+  if (!user || !verifyPassword(body.password || "", user.password)) {
+    recordLoginFailure(email);
+    sendJson(res, 401, { error: "Thông tin đăng nhập không đúng." });
+    return;
+  }
+  clearLoginAttempts(email);
   const sessions = readJson("sessions");
   const token = crypto.randomBytes(24).toString("hex");
-  sessions.push({ token, userId: user.id, createdAt: new Date().toISOString() });
+  // #8: session TTL
+  sessions.push({ token, userId: user.id, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString() });
   writeJson("sessions", sessions);
   appendLedgerEntry(user.id, "auth.login", "Dang nhap thanh cong");
   sendJson(res, 200, { token, user: summarizeUser(user) });
@@ -1064,12 +1471,20 @@ function handleGuardian(urlObject, body, res) {
   if (!user) { sendJson(res, 401, { error: "Cần đăng nhập." }); return; }
   const guardianPhone = String(body.guardianPhone || "").trim();
   const guardianEmail = String(body.guardianEmail || "").trim();
+  const existingSchedule = user.guardian?.reportSchedule || {};
   user.guardian = {
     guardianName: String(body.guardianName || "").trim(),
     guardianPhone, guardianEmail,
     status: guardianPhone || guardianEmail ? "confirmation_sent" : "not_configured",
     channels: [guardianPhone ? "sms" : null, guardianEmail ? "email" : null].filter(Boolean),
     updatedAt: new Date().toISOString(),
+    reportSchedule: {
+      enabled: body.autoReportEnabled === true || body.autoReportEnabled === "on" || body.autoReportEnabled === "true",
+      time: /^\d{2}:\d{2}$/.test(String(body.autoReportTime || "")) ? body.autoReportTime : existingSchedule.time || "08:00",
+      notifyOnMeasurement: body.notifyOnMeasurement === true || body.notifyOnMeasurement === "on" || body.notifyOnMeasurement === "true",
+      lastSentDate: existingSchedule.lastSentDate || null,
+      lastSentAt: existingSchedule.lastSentAt || null,
+    },
   };
   writeJson("users", users);
   appendLedgerEntry(user.id, "guardian.update", "Cap nhat guardian", user.guardian);
@@ -1089,13 +1504,31 @@ async function handleCreateMeasurement(urlObject, body, res) {
 
   const type = body.type === "finger" ? "finger" : "face";
   const result = analyzeMeasurement({ user, type, payload: body.payload || {} });
-  const measurements = readJson("measurements");
+  let measurements = readJson("measurements");
   const record = { id: crypto.randomUUID(), userId: user.id, type, payload: body.payload || {}, result, notes: [], createdAt: new Date().toISOString() };
   measurements.push(record);
+
+  // #15: Prune to 1000 records, archive older ones
+  const userMeasurements = measurements.filter(m => m.userId === user.id);
+  if (userMeasurements.length > 1000) {
+    const toArchive = userMeasurements.slice(0, userMeasurements.length - 1000);
+    const toKeep = userMeasurements.slice(userMeasurements.length - 1000);
+    const otherMeasurements = measurements.filter(m => m.userId !== user.id);
+    measurements = [...otherMeasurements, ...toKeep];
+    // Archive
+    try {
+      const archivePath = require("path").join(__dirname, "data", "measurements_archive.json");
+      let archive = [];
+      try { archive = JSON.parse(require("fs").readFileSync(archivePath, "utf8")); } catch {}
+      archive.push(...toArchive);
+      require("fs").writeFileSync(archivePath, JSON.stringify(archive));
+    } catch {}
+  }
   writeJson("measurements", measurements);
 
+  // BUG#1 fix: only log AFib episodes for real AFib (not shock index)
   if (result.classification === "afib") {
-    logAfibEpisode(user.id, record.id, result.bpm, result.classification);
+    logAfibEpisode(user.id, record.id, result.bpm, result.classification, measurements);
   }
 
   appendLedgerEntry(user.id, "measurement.created", `Luu phien do ${type}`, { classification: result.classification, strokeRiskScore: result.strokeRiskScore });
@@ -1114,6 +1547,9 @@ async function handleCreateMeasurement(urlObject, body, res) {
   }
 
   sendJson(res, 201, { measurement: record, dashboard, pillAlert });
+
+  // Gửi email thông báo ngay cho người thân (fire-and-forget, không block response)
+  sendGuardianMeasurementNotification(user, record, dashboard).catch(() => {});
 }
 
 async function handleMeasurementContext(urlObject, body, res) {
@@ -1138,17 +1574,40 @@ async function handleRecordBaseline(urlObject, body, res) {
   const users = readJson("users");
   const user = users.find((u) => u.id === session?.userId);
   if (!user) { sendJson(res, 401, { error: "Cần đăng nhập." }); return; }
-  const latest = readJson("measurements").filter((m) => m.userId === user.id && (m.type === "face" || m.type === "finger")).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)).slice(-1)[0];
+  const latest = readJson("measurements").filter((m) => m.userId === user.id && (m.type === "face" || m.type === "finger")).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
   if (!latest) { sendJson(res, 400, { error: "Cần có ít nhất một phiên đo trước khi ghi baseline." }); return; }
+
+  // #13: only allow if latest measurement is within 10 minutes
+  const measuredAgo = Date.now() - new Date(latest.createdAt).getTime();
+  if (measuredAgo > 10 * 60 * 1000) {
+    sendJson(res, 400, { error: "Lần đo gần nhất đã quá 10 phút. Vui lòng đo lại trước khi ghi baseline." });
+    return;
+  }
+
   const sessions = Array.isArray(user.baseline?.sessions) ? user.baseline.sessions.slice(-2) : [];
-  const bs = { measurementId: latest.id, bpm: latest.result.bpm, hrvScore: latest.result.hrvScore, sdnn: latest.result.sdnn || 0, rmssd: latest.result.rmssd || 0, irregularityIndex: latest.result.irregularityIndex, createdAt: new Date().toISOString() };
+  const bs = {
+    measurementId: latest.id, bpm: latest.result.bpm, hrvScore: latest.result.hrvScore,
+    sdnn: latest.result.sdnn || 0, rmssd: latest.result.rmssd || 0,
+    cv: latest.result.cv || 0, // #25: store CV for adaptive thresholds
+    irregularityIndex: latest.result.irregularityIndex, createdAt: new Date().toISOString()
+  };
   sessions.push(bs);
+
+  // #25: compute CV mean and std for adaptive thresholds
+  const cvValues = sessions.map(s => s.cv || 0).filter(v => v > 0);
+  const cvMean = cvValues.length ? cvValues.reduce((a, b) => a + b, 0) / cvValues.length : 0;
+  const cvStd = cvValues.length > 1
+    ? Math.sqrt(cvValues.map(v => (v - cvMean) ** 2).reduce((a, b) => a + b, 0) / cvValues.length)
+    : 0.03;
+
   user.baseline = {
     sessions,
     restingBpm: sessions.length >= 3 ? Math.round(average(sessions.map((s) => s.bpm))) : null,
     hrvScore: sessions.length >= 3 ? Math.round(average(sessions.map((s) => s.hrvScore))) : null,
     sdnn: sessions.length >= 3 ? Math.round(average(sessions.map((s) => s.sdnn || 0))) : null,
     regularityScore: sessions.length >= 3 ? 100 - Math.round(average(sessions.map((s) => s.irregularityIndex))) : null,
+    cvMean: Math.round(cvMean * 1000) / 1000, // #25
+    cvStd: Math.round(cvStd * 1000) / 1000,   // #25
     complete: sessions.length >= 3,
     updatedAt: new Date().toISOString(),
   };
@@ -1222,14 +1681,18 @@ async function handleTriggerSos(urlObject, body, res) {
   if (guardian.guardianPhone) { channelSet.add("sms"); channelSet.add("zalo"); }
   if (guardian.guardianEmail) channelSet.add("email");
   channelSet.add("web-notification");
-  const emailResult = await sendResendEmail({
+  const locationInfo = body.location
+    ? `<p><strong>Vị trí:</strong> <a href="https://maps.google.com/?q=${encodeURIComponent(body.location)}">${escHtml(body.location)}</a></p>`
+    : "";
+  const emailResult = await sendResendEmailWithRetry({ // #6: retry
     to: guardian.guardianEmail,
-    subject: `🚨 HEARTSENSE SOS KHẨN CẤP – ${user.fullName}`,
+    subject: `🚨 HEARTSENSE SOS KHẨN CẤP – ${escHtml(user.fullName)}`,
     html: `<div style="font-family:Arial;padding:20px;border:3px solid #cc2244;border-radius:10px;max-width:500px">
       <h2 style="color:#cc2244">⚠️ HEARTSENSE – CẢNH BÁO KHẨN CẤP</h2>
-      <p><strong>Bệnh nhân:</strong> ${user.fullName} (${user.age} tuổi)</p>
-      <p><strong>Lý do:</strong> ${body.reason || "Phát hiện AFib / nguy cơ cao"}</p>
+      <p><strong>Bệnh nhân:</strong> ${escHtml(user.fullName)} (${escHtml(String(user.age))} tuổi)</p>
+      <p><strong>Lý do:</strong> ${escHtml(body.reason || "Phát hiện AFib / nguy cơ cao")}</p>
       <p><strong>Thời gian:</strong> ${new Date().toLocaleString("vi-VN")}</p>
+      ${locationInfo}
       <p style="background:#fde8ec;padding:12px;border-radius:6px"><strong>Hành động:</strong> Vui lòng liên hệ ngay với người dùng. Nếu không liên lạc được, gọi cấp cứu 115.</p>
       <p style="color:#666;font-size:12px">HEARTSENSE – Hệ thống giám sát tim mạch chủ động</p>
     </div>`,
@@ -1357,28 +1820,155 @@ async function handleSendRemoteParentReport(urlObject, body, res) {
   const dashboard = await buildDashboard(user.id);
   const latest = dashboard.latestMeasurement;
   const status = latest?.result?.classification === "afib" ? "⚠️ CÓ CẢNH BÁO" : latest?.result?.classification === "elevated" ? "Theo dõi" : "Bình thường";
+  const personalMessage = String(body.personalMessage || "").trim().slice(0, 500);
 
   const emailResult = await sendResendEmail({
     to: guardian.guardianEmail,
-    subject: `HEARTSENSE – Bao cao hang ngay: ${user.fullName} – ${new Date().toLocaleDateString("vi-VN")}`,
-    html: `<div style="font-family:Arial;padding:20px;max-width:500px">
-      <h2 style="color:#10233f">HEARTSENSE – Báo cáo hàng ngày</h2>
-      <p><strong>Người được giám sát:</strong> ${user.fullName} (${user.age} tuổi)</p>
-      <p><strong>Trạng thái hôm nay:</strong> <strong style="color:${status.includes("CẢNH BÁO") ? "#cc2244" : "#2c9f7f"}">${status}</strong></p>
-      ${latest ? `
-      <div style="background:#f8fafc;padding:12px;border-radius:8px;margin:12px 0">
-        <p><strong>Nhịp tim:</strong> ${latest.result.bpm} BPM</p>
-        <p><strong>HRV:</strong> ${latest.result.sdnn || latest.result.hrvScore}</p>
-        <p><strong>Stroke Risk:</strong> ${latest.result.strokeRiskScore}%</p>
-        <p><strong>Giờ đo:</strong> ${new Date(latest.createdAt).toLocaleString("vi-VN")}</p>
-      </div>` : `<p>Chưa có lần đo hôm nay. Hãy nhắc ${user.fullName} đo tim!</p>`}
-      <p>${dashboard.weeklyReport?.summary || ""}</p>
-      <p style="color:#666;font-size:12px">HEARTSENSE – Mắt thần cho con xa. Hệ thống tự động gửi báo cáo hàng ngày.</p>
-    </div>`,
+    subject: `HEARTSENSE – Báo cáo hàng ngày: ${user.fullName} – ${new Date().toLocaleDateString("vi-VN")}`,
+    html: buildReportEmailHtml(user, latest, status, dashboard, personalMessage),
   });
 
-  appendLedgerEntry(user.id, "remote_parent.sent", "Gửi báo cáo đến guardian");
+  appendLedgerEntry(user.id, "remote_parent.sent", "Gửi báo cáo đến guardian", { hasMessage: Boolean(personalMessage) });
   sendJson(res, 200, { sent: emailResult.sent, message: emailResult.sent ? `Báo cáo đã gửi đến ${guardian.guardianEmail}` : `Chưa gửi được (${emailResult.reason})` });
+}
+
+// ─── Cron Scheduler (#7, #16) ─────────────────────────────────────────────────
+function startAutoReportScheduler() {
+  setInterval(async () => {
+    const nowUTC = new Date();
+    const vnNow = new Date(nowUTC.getTime() + 7 * 3600000); // UTC+7
+    const vnHour = vnNow.getUTCHours();
+    const vnMinute = vnNow.getUTCMinutes();
+    const vnDateStr = vnNow.toISOString().slice(0, 10);
+    const vnTimeStr = `${String(vnHour).padStart(2, "0")}:${String(vnMinute).padStart(2, "0")}`;
+
+    const users = readJson("users");
+
+    // ── Auto daily report ──────────────────────────────────────────────────────
+    for (const user of users) {
+      const schedule = user.guardian?.reportSchedule;
+      if (!schedule?.enabled || !user.guardian?.guardianEmail) continue;
+      const schedTime = schedule.time || "08:00";
+      if (vnTimeStr !== schedTime) continue;
+      if (schedule.lastSentDate === vnDateStr) continue; // #7: check lastSentDate
+
+      try {
+        const dashboard = await buildDashboard(user.id);
+        const latest = dashboard.latestMeasurement;
+        const status = latest?.result?.classification === "afib" ? "⚠️ CÓ CẢNH BÁO"
+          : latest?.result?.classification === "elevated" ? "Theo dõi" : "Bình thường";
+        const emailResult = await sendResendEmailWithRetry({ // #6
+          to: user.guardian.guardianEmail,
+          subject: `HEARTSENSE – Báo cáo tự động: ${escHtml(user.fullName)} – ${vnNow.toLocaleDateString("vi-VN")}`,
+          html: buildReportEmailHtml(user, latest, status, dashboard),
+        });
+        if (emailResult.sent) {
+          const allUsers = readJson("users");
+          const u = allUsers.find((x) => x.id === user.id);
+          if (u?.guardian?.reportSchedule) {
+            u.guardian.reportSchedule.lastSentDate = vnDateStr;
+            u.guardian.reportSchedule.lastSentAt = nowUTC.toISOString();
+            writeJson("users", allUsers);
+          }
+          appendLedgerEntry(user.id, "remote_parent.auto_sent", "Tu dong gui bao cao theo lich", { email: user.guardian.guardianEmail, scheduledTime: schedTime });
+          console.log(`[AutoReport] Gui den ${user.guardian.guardianEmail} cho ${user.fullName}`);
+        }
+      } catch (err) {
+        console.error(`[AutoReport] Loi user ${user.id}: ${err.message}`);
+      }
+    }
+
+    // ── Medication reminders (#7, #16) ─────────────────────────────────────────
+    const reminders = readJson("reminders");
+    for (const reminder of reminders) {
+      if (!reminder.time || reminder.time !== vnTimeStr) continue;
+      // Find user
+      const user = users.find(u => u.id === reminder.userId);
+      if (!user) continue;
+      // Check if already sent today
+      if (reminder.lastReminderDate === vnDateStr) continue;
+
+      try {
+        // Send email to guardian if configured
+        const guardianEmail = user.guardian?.guardianEmail;
+        if (guardianEmail) {
+          await sendResendEmailWithRetry({
+            to: guardianEmail,
+            subject: `HEARTSENSE – Nhắc thuốc: ${escHtml(reminder.medicineName)} – ${user.fullName}`,
+            html: `<div style="font-family:Arial;padding:20px;max-width:500px">
+              <h3 style="color:#0f766e">💊 Nhắc uống thuốc</h3>
+              <p><strong>Bệnh nhân:</strong> ${escHtml(user.fullName)}</p>
+              <p><strong>Thuốc:</strong> ${escHtml(reminder.medicineName)}</p>
+              <p><strong>Liều:</strong> ${escHtml(reminder.dose || "Theo chỉ định")}</p>
+              <p><strong>Giờ:</strong> ${escHtml(reminder.time)}</p>
+              ${reminder.pillColor ? `<p><strong>Màu viên:</strong> ${escHtml(reminder.pillColor)}</p>` : ""}
+              <p style="color:#999;font-size:11px">HEARTSENSE – Nhắc thuốc tự động</p>
+            </div>`,
+          });
+        }
+        // Mark as sent today
+        reminder.lastReminderDate = vnDateStr;
+      } catch (err) {
+        console.error(`[MedReminder] Loi reminder ${reminder.id}: ${err.message}`);
+      }
+    }
+    // Save updated reminders with lastReminderDate
+    writeJson("reminders", reminders);
+
+  }, 60000);
+  console.log("[Cron] Scheduler khoi dong – kiem tra moi phut (auto-report + medication reminders).");
+}
+
+// ─── Medication Adherence (#30) ───────────────────────────────────────────────
+async function handleMedicationAdherence(urlObject, body, res) {
+  const session = getSessionFromRequest(urlObject, body);
+  const user = getUserBySession(session);
+  if (!user) { sendJson(res, 401, { error: "Cần đăng nhập." }); return; }
+  const reminders = readJson("reminders");
+  const reminder = reminders.find(r => r.id === body.reminderId && r.userId === user.id);
+  if (!reminder) { sendJson(res, 404, { error: "Không tìm thấy nhắc thuốc." }); return; }
+  if (!reminder.adherence) reminder.adherence = {};
+  const dateKey = String(body.date || new Date().toISOString().slice(0, 10));
+  reminder.adherence[dateKey] = Boolean(body.taken);
+  writeJson("reminders", reminders);
+  const totalDays = Object.keys(reminder.adherence).length;
+  const takenDays = Object.values(reminder.adherence).filter(Boolean).length;
+  const adherencePct = totalDays ? Math.round((takenDays / totalDays) * 100) : 0;
+  appendLedgerEntry(user.id, "medication.adherence", "Xac nhan uong thuoc", { reminderId: body.reminderId, taken: body.taken, date: dateKey });
+  sendJson(res, 200, { ok: true, adherencePct, takenDays, totalDays });
+}
+
+// ─── Delete Measurement (#new) ────────────────────────────────────────────────
+async function handleDeleteMeasurement(urlObject, body, res) {
+  const session = getSessionFromRequest(urlObject, body);
+  const user = getUserBySession(session);
+  if (!user) { sendJson(res, 401, { error: "Cần đăng nhập." }); return; }
+  const measurements = readJson("measurements");
+  const idx = measurements.findIndex(m => m.id === body.measurementId && m.userId === user.id);
+  if (idx === -1) { sendJson(res, 404, { error: "Không tìm thấy phiên đo." }); return; }
+  measurements.splice(idx, 1);
+  writeJson("measurements", measurements);
+  appendLedgerEntry(user.id, "measurement.deleted", "Xoa phien do", { measurementId: body.measurementId });
+  sendJson(res, 200, { ok: true });
+}
+
+// ─── Circadian endpoint (#28) ─────────────────────────────────────────────────
+async function handleGetCircadian(urlObject, body, res, userId) {
+  const session = getSessionFromRequest(urlObject, body);
+  if (!session || session.userId !== userId) { sendJson(res, 401, { error: "Khong du quyen." }); return; }
+  const allMeasurements = readJson("measurements");
+  const circadian = buildCircadianPattern(userId, allMeasurements);
+  sendJson(res, 200, { circadian });
+}
+
+// ─── Population Stats (#new) ──────────────────────────────────────────────────
+function handlePopulationStats(res) {
+  const measurements = readJson("measurements").filter(m => m.type === "face" || m.type === "finger");
+  if (!measurements.length) { sendJson(res, 200, { avgBpm: 72, avgHrv: 42, afibRate: 0, totalSessions: 0 }); return; }
+  const avgBpm = Math.round(average(measurements.map(m => m.result?.bpm || 0).filter(Boolean)));
+  const avgHrv = Math.round(average(measurements.map(m => m.result?.hrvScore || 0).filter(Boolean)));
+  const afibRate = Math.round(measurements.filter(m => m.result?.classification === "afib").length / measurements.length * 100);
+  sendJson(res, 200, { avgBpm, avgHrv, afibRate, totalSessions: measurements.length });
 }
 
 // ─── Static ───────────────────────────────────────────────────────────────────
@@ -1429,17 +2019,23 @@ async function handleRequest(req, res) {
   if (req.method === "POST" && p === "/api/medications/check-interactions") { await handleCheckInteractions(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/pill-protocol") { await handleSavePillProtocol(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/export-token") { await handleGenerateExportToken(urlObject, await parseBody(req), res); return; }
+  if (req.method === "POST" && p === "/api/medications/adherence") { await handleMedicationAdherence(urlObject, await parseBody(req), res); return; }
+  if (req.method === "POST" && p === "/api/measurements/delete") { await handleDeleteMeasurement(urlObject, await parseBody(req), res); return; }
+  if (req.method === "GET" && p === "/api/population-stats") { handlePopulationStats(res); return; }
 
   if ((req.method === "GET" || req.method === "POST") && p.startsWith("/api/users/") && p.endsWith("/dashboard")) { const b = req.method === "POST" ? await parseBody(req) : {}; await handleDashboard(urlObject, b, res, p.split("/")[3]); return; }
   if (req.method === "GET" && p.startsWith("/api/users/") && p.endsWith("/report")) { await handleReport(urlObject, res, p.split("/")[3]); return; }
   if (req.method === "GET" && p.startsWith("/api/users/") && p.endsWith("/doctor-export")) { await handleDoctorExport(urlObject, res, p.split("/")[3]); return; }
   if (req.method === "POST" && p.startsWith("/api/users/") && p.endsWith("/remote-parent/send")) { await handleSendRemoteParentReport(urlObject, await parseBody(req), res); return; }
+  if ((req.method === "GET" || req.method === "POST") && p.match(/^\/api\/users\/[^/]+\/circadian$/)) { const b = req.method === "POST" ? await parseBody(req) : {}; await handleGetCircadian(urlObject, b, res, p.split("/")[3]); return; }
 
   serveStatic(urlObject, res);
 }
 
 initDataStore().then(() => {
   updateSyncStats();
+  cleanupExpiredSessions(); // #8: remove expired sessions on startup
+  startAutoReportScheduler();
   http.createServer((req, res) => {
     handleRequest(req, res).catch((err) => {
       sendJson(res, 500, { error: "Server error", detail: err.message });

@@ -1659,3 +1659,169 @@ input:focus, select:focus {
   .result-highlight::after { display: none; } /* tắt dot animation trên mobile */
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   HEARTSENSE v4.1 — New Features CSS (38 improvements)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Toast notifications (#20) ───────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #fff;
+  background: #1a3458;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.22);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: auto;
+  max-width: 320px;
+}
+.toast.toast-visible { opacity: 1; transform: translateY(0); }
+.toast.toast-success { background: #059669; }
+.toast.toast-error   { background: #cc2244; }
+.toast.toast-warn    { background: #d97706; }
+.toast.toast-info    { background: #1a3458; }
+
+/* ── Offline bar (#35) ─────────────────────────────────────────── */
+.offline-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9998;
+  background: #d97706;
+  color: #fff;
+  text-align: center;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ── Pre-measurement checklist (#29) ──────────────────────────── */
+.checklist-box {
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.checklist-box label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #1e3a5f;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+.checklist-box label input[type=checkbox] {
+  width: 15px;
+  height: 15px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+/* ── Medication adherence confirm button (#30) ─────────────────── */
+.confirm-pill-btn { cursor: pointer; }
+.btn-taken { background: #d1fae5 !important; color: #059669 !important; border-color: #6ee7b7 !important; }
+
+/* ── Quick-Start button (#36) ──────────────────────────────────── */
+.quick-start-btn {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+@keyframes pulse-soft {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(204,34,68,0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(204,34,68,0); }
+}
+
+/* ── Poincaré SD1/SD2 display (#23/#24) ───────────────────────── */
+.poincare-display {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.poincare-display .metric-chip {
+  background: var(--teal-soft);
+  border: 1px solid var(--teal);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--teal);
+}
+.poincare-display .metric-chip.warn {
+  background: var(--amber-soft);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+/* ── Circadian bar chart by hour (#26) ────────────────────────── */
+.circadian-bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 60px;
+  margin-top: 8px;
+  padding: 4px 0;
+  overflow-x: auto;
+}
+.circadian-bar {
+  flex: 1;
+  min-width: 10px;
+  background: var(--teal);
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  cursor: default;
+  opacity: 0.75;
+  transition: opacity 0.15s;
+}
+.circadian-bar:hover { opacity: 1; }
+.circadian-bar.peak { background: var(--accent); opacity: 1; }
+.circadian-bar .bar-tip {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--glass-dark);
+  color: #fff;
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  display: none;
+  pointer-events: none;
+  z-index: 10;
+}
+.circadian-bar:hover .bar-tip { display: block; }
+.circadian-hour-labels {
+  display: flex;
+  gap: 3px;
+  margin-top: 2px;
+}
+.circadian-hour-labels span {
+  flex: 1;
+  min-width: 10px;
+  text-align: center;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+/* ── Adherence confirm button alias ───────────────────────────── */
+.adherence-btn { cursor: pointer; }
+.adherence-btn.taken { background: #d1fae5 !important; color: #059669 !important; border-color: #6ee7b7 !important; }
+
+
+

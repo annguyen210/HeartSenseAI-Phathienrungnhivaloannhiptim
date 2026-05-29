@@ -1,4 +1,4 @@
-// HEARTSENSE v4.0 – Enhanced client with 19 features
+// HEARTSENSE v4.0 – Enhanced client with 38 features
 const HEARTSENSE_TOKEN_KEY = "heartsense_token";
 const MEASUREMENT_SECONDS = 30;
 const BREATHING_SECONDS = 60;
@@ -14,7 +14,9 @@ const state = {
   sosTimer: null, sosRemaining: 15, breathingInterval: null, breathingTimeout: null,
   dashboardPoll: null, audioContext: null, modalConfirm: null,
   afibConfirmMode: false, measurementFps: 30,
-  torchOn: false, sosSending: false, // sosSending: chống double-trigger SOS
+  torchOn: false, sosSending: false,
+  isOnline: navigator.onLine,
+  lowQualityStart: null, // for #10 signal quality warning
 };
 
 // ─── Element refs ─────────────────────────────────────────────────────────────
@@ -29,6 +31,7 @@ const el = {
   logoutBtn: document.querySelector("#logoutBtn"),
   reportLink: document.querySelector("#reportLink"),
   guardianForm: document.querySelector("#guardianForm"),
+  scheduleForm: document.querySelector("#scheduleForm"),
   guardianStatus: document.querySelector("#guardianStatus"),
   recordBaselineBtn: document.querySelector("#recordBaselineBtn"),
   refreshDashboardBtn: document.querySelector("#refreshDashboardBtn"),
@@ -117,7 +120,24 @@ const el = {
   sendParentReportBtn: document.querySelector("#sendParentReportBtn"),
   parentReportStatus: document.querySelector("#parentReportStatus"),
   remoteParentInfoStatus: document.querySelector("#remoteParentInfoStatus"),
+  parentReportMessage: document.querySelector("#parentReportMessage"),
+  notifyOnMeasurement: document.querySelector("#notifyOnMeasurement"),
+  autoReportEnabled: document.querySelector("#autoReportEnabled"),
+  autoReportTime: document.querySelector("#autoReportTime"),
+  autoReportScheduleStatus: document.querySelector("#autoReportScheduleStatus"),
   hrvAdvancedBox: document.querySelector("#hrvAdvancedBox"),
+  // New elements (#20-#36)
+  toastContainer: document.querySelector("#toastContainer"),
+  quickStartBtn: document.querySelector("#quickStartBtn"),
+  preMeasurementChecklist: document.querySelector("#preMeasurementChecklist"),
+  cha2ds2Box: document.querySelector("#cha2ds2Box"),
+  bpTrendBox: document.querySelector("#bpTrendBox"),
+  circadianBox: document.querySelector("#circadianBox"),
+  poincareBox: document.querySelector("#poincareBox"),
+  sampEnBox: document.querySelector("#sampEnBox"),
+  populationBenchmarkBox: document.querySelector("#populationBenchmarkBox"),
+  guardianCallBtn: document.querySelector("#guardianCallBtn"),
+  offlineIndicator: document.querySelector("#offlineIndicator"),
 };
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -132,8 +152,80 @@ function api(path, options = {}) {
   });
 }
 
+// ─── Toast Notifications (#20) ────────────────────────────────────────────────
+function showToast(msg, type = "info", duration = 3500) {
+  if (!el.toastContainer) return;
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.textContent = msg;
+  el.toastContainer.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("toast-visible"));
+  setTimeout(() => {
+    toast.classList.remove("toast-visible");
+    setTimeout(() => toast.remove(), 350);
+  }, duration);
+}
+
+// ─── Loading State Helper (#21) ───────────────────────────────────────────────
+function setLoading(btn, loading, text) {
+  if (!btn) return;
+  btn.disabled = loading;
+  if (loading) { btn._origText = btn.textContent; btn.textContent = text || "Đang xử lý..."; }
+  else { btn.textContent = btn._origText || btn.textContent; }
+}
+
+// ─── IndexedDB Offline Queue (#35) ───────────────────────────────────────────
+const IDB_NAME = "heartsense_offline";
+const IDB_STORE = "pending_measurements";
+function openOfflineDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE, { keyPath: "id", autoIncrement: true });
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+async function saveOfflineMeasurement(data) {
+  try {
+    const db = await openOfflineDb();
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).add({ ...data, savedAt: new Date().toISOString() });
+    showToast("Đã lưu ngoại tuyến. Sẽ đồng bộ khi có mạng.", "warn");
+  } catch (e) { console.error("[IndexedDB]", e); }
+}
+async function syncOfflineMeasurements() {
+  if (!state.token || !state.user) return;
+  try {
+    const db = await openOfflineDb();
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    const store = tx.objectStore(IDB_STORE);
+    const all = await new Promise((res, rej) => { const r = store.getAll(); r.onsuccess = () => res(r.result); r.onerror = rej; });
+    for (const item of all) {
+      try {
+        await api("/api/measurements", { method: "POST", body: JSON.stringify({ token: state.token, type: item.type, payload: item.payload }) });
+        store.delete(item.id);
+      } catch {}
+    }
+    if (all.length) { showToast(`Đã đồng bộ ${all.length} phiên đo ngoại tuyến.`, "success"); await loadDashboard(); }
+  } catch {}
+}
+
+// ─── Offline indicator (#35) ──────────────────────────────────────────────────
+function updateOnlineStatus() {
+  state.isOnline = navigator.onLine;
+  if (el.offlineIndicator) {
+    el.offlineIndicator.hidden = navigator.onLine;
+    el.offlineIndicator.textContent = "Không có mạng – Đang lưu ngoại tuyến";
+  }
+  if (navigator.onLine) syncOfflineMeasurements();
+}
+
 function isMobile() { return /android|iphone|ipad|mobile/i.test(navigator.userAgent); }
-function setAuthState(msg, kind = "neutral") { el.authState.textContent = msg; el.authState.className = kind === "error" ? "badge danger" : "state-pill"; }
+function setAuthState(msg, kind = "neutral") {
+  el.authState.textContent = msg;
+  el.authState.className = kind === "error" ? "badge danger" : "state-pill";
+  if (kind === "error") showToast(msg, "error");
+}
 
 function setReportLink() {
   if (!state.user || !state.token) { el.reportLink.classList.add("disabled"); el.reportLink.href = "#"; return; }
@@ -411,19 +503,19 @@ function multiWindowBpm(filtered, fps, mode) {
 function analyzePPGSignal(rawSamples, mode, fps) {
   if (rawSamples.length < fps * 10) return null;
 
+  // #27: Motion artifact rejection
+  const cleanSamples = rejectMotionWindows(rawSamples, fps);
+
   // Tín hiệu: POS (R+G+B) cho Face — RED cho Ngón Trỏ
   const rawSignal = mode === "finger"
-    ? rawSamples.map(s => s.avgRed)
-    : extractPosSignal(rawSamples);
+    ? cleanSamples.map(s => s.avgRed)
+    : extractPosSignal(cleanSamples);
 
   // ── Kiểm tra tính xác thực tín hiệu PPG ──────────────────────────────────
   const filtered = bandpassFilter(rawSignal, fps);
   const filteredStd = stdDev(filtered);
 
-  // Chỉ chặn khi tín hiệu sau lọc hoàn toàn bằng 0 (không có bất kỳ thông tin nào)
-  // Lưu ý: Finger PPG che camera là ĐÚNG kỹ thuật — không check "tối = lỗi"
-  if (filteredStd < 0.20) return null;
-
+  // BUG#12 fix: merge two consecutive checks into one
   if (filteredStd < 0.25) return null;
 
   // Phương pháp 1: Multi-window median (ổn định nhất)
@@ -467,9 +559,9 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   const pnn50 = diffs.length >= 3 ? Math.round(diffs.filter(d => d > 50).length / diffs.length * 100) : 0;
   const cv = rrIntervals.length >= 4 ? stdDev(rrIntervals) / average(rrIntervals) : 0;
 
-  // Signal quality
-  const lightScores = rawSamples.map(s => Math.max(18, Math.min(99, 100 - Math.abs(s.brightness - 122) * 0.9)));
-  const movementScores = rawSamples.map(s => Math.max(12, Math.min(99, 100 - s.movement * 1.8)));
+  // Signal quality (use cleanSamples for better accuracy)
+  const lightScores = cleanSamples.map(s => Math.max(18, Math.min(99, 100 - Math.abs(s.brightness - 122) * 0.9)));
+  const movementScores = cleanSamples.map(s => Math.max(12, Math.min(99, 100 - s.movement * 1.8)));
   const lightScore = Math.round(average(lightScores));
   const stabilityScore = Math.round(average(movementScores));
   // Số phương pháp đồng thuận → tăng signal quality
@@ -483,31 +575,51 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   )));
 
   // ═══ AFib detection — 6 điều kiện, cân bằng sensitivity / specificity ═══════
-  const qualityGate = mode === "finger" ? 65 : 65; // hạ từ 70 → 65 để không bỏ sót AFib trên webcam/laptop
+  // #23: SampEn boost
+  const sampEn = rrIntervals.length >= 12 ? sampleEntropy(rrIntervals, 2, 0.2) : 0;
+  // #24: Poincaré
+  const poincareResult = poincarePlot(rrIntervals);
+  // #26: LF/HF
+  const lfhf = computeLfHfRatio(rrIntervals);
+
+  const qualityGate = mode === "finger" ? 65 : 65;
+  const sampEnBoost = sampEn > 0.9 && cv > 0.20; // #23
+  const poincareBoost = poincareResult.ratio > 0.85; // #24
   const afibLikelihood = (
-    signalQuality >= qualityGate &&       // 1. Tín hiệu đủ tốt (≥ 65%)
-    rrIntervals.length >= 10 &&           // 2. Đủ ≥10 khoảng RR
-    bpm >= 50 && bpm <= 150 &&            // 3. BPM trong phạm vi hợp lý
-    cv > 0.22 &&                          // 4. Biến thiên nhịp cao (hạ từ 0.28 → 0.22)
-    pnn50 > 30 &&                         // 5. Nhiều khoảng lệch >50ms (hạ từ 40 → 30)
-    sdnn > 45                             // 6. SDNN cao (hạ từ 60 → 45ms)
-  );
-  const afibScore = Math.round(Math.min(85, cv * 240 + (pnn50 > 40 ? 14 : 0) + (sdnn > 80 ? 8 : 0)));
+    signalQuality >= qualityGate &&
+    rrIntervals.length >= 10 &&
+    bpm >= 50 && bpm <= 150 &&
+    cv > 0.22 &&
+    pnn50 > 30 &&
+    sdnn > 45
+  ) || (sampEnBoost && cv > 0.20 && rrIntervals.length >= 10); // #23 SampEn path
+
+  const afibScore = Math.round(Math.min(85, cv * 240 + (pnn50 > 40 ? 14 : 0) + (sdnn > 80 ? 8 : 0)
+    + (sampEnBoost ? 8 : 0) + (poincareBoost ? 5 : 0)));
 
   const hrvScore = Math.round(Math.min(94, Math.max(14,
     (Math.min(sdnn || 28, 90) / 90 * 55) + (Math.min(rmssd || 18, 65) / 65 * 45)
   )));
 
+  // #29: pre-measurement checklist context
+  const contextUnchecked = el.preMeasurementChecklist
+    ? Array.from(el.preMeasurementChecklist.querySelectorAll('input[type=checkbox]')).some(cb => !cb.checked)
+    : false;
+
   return {
     estimatedBpm: bpm, bpm, sdnn, rmssd, pnn50,
     cv: Math.round(cv * 1000) / 1000,
+    sampEn, // #23
+    sd1: poincareResult.sd1, sd2: poincareResult.sd2, // #24
+    lfhfRatio: lfhf?.ratio || null, // #26
     hrvScore, afibLikelihood, irregularityIndex: afibScore,
     signalQuality, lightScore, stabilityScore,
-    peakCount: peaks.length,
+    peakCount: peaks.length, peakPositions: peaks.slice(0, 50), // #31 for waveform annotations
     rrIntervals: rrIntervals.slice(0, 30),
     waveform: normalizeWave(detrend(rawSignal).slice(-90)),
     systolic: Number(el.systolicInput.value || 128),
     contextNote: el.measurementContextInput.value.trim(),
+    contextUnchecked, // #29
   };
 }
 
@@ -532,10 +644,12 @@ function analyzeSamplesLegacy(samples, mode) {
         estimatedBpm: acfBpm, bpm: acfBpm,
         hrvScore: Math.round(Math.max(20, Math.min(78, 62 - Math.max(0, irr - 20) * 0.38))),
         sdnn: 0, rmssd: 0, pnn50: 0, cv: 0, lightScore, stabilityScore,
-        signalQuality: Math.min(signalQuality, 60), // cap vì dữ liệu ngắn
+        signalQuality: Math.min(signalQuality, 60),
         irregularityIndex: irr, waveform: normalizeWave(rawSignal.slice(-90)),
         rrIntervals: [], systolic: Number(el.systolicInput.value || 128),
         contextNote: el.measurementContextInput.value.trim(),
+        contextUnchecked: el.preMeasurementChecklist ? Array.from(el.preMeasurementChecklist.querySelectorAll('input[type=checkbox]')).some(cb => !cb.checked) : false,
+        sampEn: 0, sd1: 0, sd2: 0, lfhfRatio: null,
       };
     }
   }
@@ -552,12 +666,104 @@ function analyzeSamplesLegacy(samples, mode) {
     irregularityIndex: irr, waveform: normalizeWave(rawSignal.slice(-90)),
     rrIntervals: [], systolic: Number(el.systolicInput.value || 128),
     contextNote: el.measurementContextInput.value.trim(),
+    contextUnchecked: el.preMeasurementChecklist ? Array.from(el.preMeasurementChecklist.querySelectorAll('input[type=checkbox]')).some(cb => !cb.checked) : false,
+    sampEn: 0, sd1: 0, sd2: 0, lfhfRatio: null,
   };
 }
 
 function analyzeSamples(samples, mode) {
   const result = analyzePPGSignal(samples, mode, state.measurementFps);
   return result || analyzeSamplesLegacy(samples, mode);
+}
+
+// ─── Sample Entropy (#23) ─────────────────────────────────────────────────────
+function sampleEntropy(rrs, m = 2, r = 0.2) {
+  if (!rrs || rrs.length < m + 2) return 0;
+  const n = rrs.length;
+  const tolerance = r * (rrs.reduce((s, v) => s + v, 0) / n); // r * mean
+  function countMatches(len) {
+    let c = 0;
+    for (let i = 0; i < n - len; i++) {
+      for (let j = i + 1; j < n - len; j++) {
+        let match = true;
+        for (let k = 0; k < len; k++) {
+          if (Math.abs(rrs[i + k] - rrs[j + k]) > tolerance) { match = false; break; }
+        }
+        if (match) c++;
+      }
+    }
+    return c;
+  }
+  const Cm = countMatches(m);
+  const Cm1 = countMatches(m + 1);
+  if (!Cm || !Cm1) return 0;
+  return Math.round(-Math.log(Cm1 / Cm) * 1000) / 1000;
+}
+
+// ─── Poincaré Plot (#24) ──────────────────────────────────────────────────────
+function poincarePlot(rrs) {
+  if (!rrs || rrs.length < 4) return { sd1: 0, sd2: 0, ratio: 0 };
+  const diffs = rrs.slice(1).map((r, i) => r - rrs[i]);
+  const sd1 = Math.round(Math.sqrt(diffs.map(d => d * d).reduce((a, b) => a + b) / diffs.length) / Math.SQRT2 * 10) / 10;
+  const n = rrs.length;
+  const meanRR = rrs.reduce((a, b) => a + b) / n;
+  const sd2 = Math.round(Math.sqrt(rrs.map(r => (r - meanRR) ** 2).reduce((a, b) => a + b) / n) * 10) / 10;
+  const ratio = sd2 > 0 ? Math.round((sd1 / sd2) * 1000) / 1000 : 0;
+  return { sd1, sd2, ratio };
+}
+
+// ─── LF/HF Ratio from RR intervals (#26) ─────────────────────────────────────
+function computeLfHfRatio(rrs, fps = 4) {
+  if (!rrs || rrs.length < 16) return null;
+  // Resample RR to evenly-spaced time series at fps Hz
+  const rrsMs = rrs.map(r => r); // already in ms
+  const totalTime = rrsMs.reduce((a, b) => a + b, 0) / 1000; // seconds
+  const nPoints = Math.floor(totalTime * fps);
+  if (nPoints < 16) return null;
+  // Simple linear interpolation resampling
+  const times = [];
+  let t = 0;
+  for (const rr of rrsMs) { times.push(t); t += rr / 1000; }
+  const sampled = [];
+  for (let i = 0; i < nPoints; i++) {
+    const tp = i / fps;
+    let lo = 0;
+    for (let j = 0; j < times.length - 1; j++) { if (times[j] <= tp) lo = j; else break; }
+    const hi = Math.min(lo + 1, rrsMs.length - 1);
+    const frac = times[hi] > times[lo] ? (tp - times[lo]) / (times[hi] - times[lo]) : 0;
+    sampled.push(rrsMs[lo] + frac * (rrsMs[hi] - rrsMs[lo]));
+  }
+  // DFT to compute LF (0.04-0.15 Hz) and HF (0.15-0.40 Hz) power
+  const mean = sampled.reduce((a, b) => a + b) / sampled.length;
+  const centered = sampled.map(v => v - mean);
+  const N = centered.length;
+  let lfPow = 0, hfPow = 0;
+  for (let k = 1; k < Math.floor(N / 2); k++) {
+    const freq = k * fps / N;
+    let re = 0, im = 0;
+    for (let n = 0; n < N; n++) { re += centered[n] * Math.cos(2 * Math.PI * k * n / N); im -= centered[n] * Math.sin(2 * Math.PI * k * n / N); }
+    const pow = (re * re + im * im) / N;
+    if (freq >= 0.04 && freq < 0.15) lfPow += pow;
+    else if (freq >= 0.15 && freq <= 0.40) hfPow += pow;
+  }
+  const ratio = hfPow > 0 ? Math.round((lfPow / hfPow) * 100) / 100 : null;
+  return { lfPow: Math.round(lfPow), hfPow: Math.round(hfPow), ratio };
+}
+
+// ─── Motion Artifact Rejection (#27) ─────────────────────────────────────────
+function rejectMotionWindows(samples, fps, windowSec = 2) {
+  const winSize = Math.floor(fps * windowSec);
+  const movements = samples.map(s => s.movement || 0);
+  const meanMov = movements.reduce((a, b) => a + b, 0) / movements.length;
+  const stdMov = Math.sqrt(movements.map(m => (m - meanMov) ** 2).reduce((a, b) => a + b, 0) / movements.length);
+  const threshold = meanMov + 3 * stdMov;
+  const clean = [];
+  for (let i = 0; i + winSize <= samples.length; i += winSize) {
+    const win = samples.slice(i, i + winSize);
+    const maxMov = Math.max(...win.map(s => s.movement || 0));
+    if (maxMov <= threshold) clean.push(...win);
+  }
+  return clean.length >= fps * 8 ? clean : samples; // fallback to all if too few clean
 }
 
 // ─── Camera & Preview ─────────────────────────────────────────────────────────
@@ -770,6 +976,13 @@ function sampleFrame(mode) {
   const count = pixels.length / 4;
   const avgRed = r / count, avgGreen = g / count, avgBlue = b / count;
   const brightness = 0.299 * avgRed + 0.587 * avgGreen + 0.114 * avgBlue;
+
+  // #11: Skin pixel validation — reject if brightness out of human skin range
+  if (mode === "face" && (brightness < 40 || brightness > 215)) {
+    state.previousSample = { avgRed, avgGreen, avgBlue };
+    return null; // not skin region
+  }
+
   const movement = state.previousSample ? Math.abs(state.previousSample.avgRed - avgRed) + Math.abs(state.previousSample.avgGreen - avgGreen) + Math.abs(state.previousSample.avgBlue - avgBlue) : 0;
   state.previousSample = { avgRed, avgGreen, avgBlue };
   return { brightness, avgRed, avgGreen, avgBlue, movement };
@@ -856,13 +1069,25 @@ async function runMeasurement() {
         state.measurementSamples.push(sample);
         frameCount++;
         if (state.measurementSamples.length > MEASUREMENT_SECONDS * 35) state.measurementSamples.shift();
-        renderPreviewMetrics(derivePreviewMetrics(sample));
+        const metrics = derivePreviewMetrics(sample);
+        renderPreviewMetrics(metrics);
+        // #10: Signal quality warning
+        if (metrics.signalQuality < 40) {
+          if (!state.lowQualityStart) state.lowQualityStart = now;
+          else if ((now - state.lowQualityStart) > 5000) {
+            el.deepAnalysisText.textContent = "⚠️ Chất lượng tín hiệu thấp! Điều chỉnh vị trí tay/mặt và ánh sáng.";
+            if (el.deepAnalysisPrompt) el.deepAnalysisPrompt.classList.remove("hidden");
+          }
+        } else {
+          state.lowQualityStart = null;
+        }
       }
       if (remaining <= 0) { state.measurementFps = Math.round(frameCount / MEASUREMENT_SECONDS); resolve(); return; }
       requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   });
+  state.lowQualityStart = null;
 
   state.measurementActive = false;
   el.measurementOverlay.classList.add("hidden");
@@ -874,13 +1099,23 @@ async function runMeasurement() {
 
   if (!state.token || !state.user) { renderGuestResult(localResult); return; }
 
+  // #35: Save offline if no internet
+  if (!state.isOnline) {
+    await saveOfflineMeasurement({ type: state.measurementMode, payload: localResult });
+    showToast("Đã lưu ngoại tuyến. Sẽ đồng bộ khi có mạng.", "warn");
+    return;
+  }
+
   try {
+    setLoading(el.startMeasureBtn, true, "Đang gửi kết quả...");
     const response = await api("/api/measurements", {
       method: "POST",
       body: JSON.stringify({ token: state.token, type: state.measurementMode, payload: localResult }),
     });
+    setLoading(el.startMeasureBtn, false);
     state.lastMeasurementRecord = response.measurement;
     renderDashboard(response.dashboard);
+    showToast("Đã lưu kết quả đo!", "success");
 
     if (response.pillAlert?.triggered) renderPillAlert(response.pillAlert);
 
@@ -895,7 +1130,7 @@ async function runMeasurement() {
     } else {
       el.abnormalPromptBox.classList.add("hidden");
     }
-  } catch (err) { setAuthState(err.message, "error"); }
+  } catch (err) { setLoading(el.startMeasureBtn, false); setAuthState(err.message, "error"); }
 }
 
 // ─── AFib Confirmation Flow ───────────────────────────────────────────────────
@@ -1069,6 +1304,119 @@ function renderHrvAdvanced(result) {
     "<p class='muted'>Chưa đủ dữ liệu PPG để tính SDNN/RMSSD. Đo thêm để nâng cao độ chính xác.</p>";
 }
 
+// ─── CHA2DS2-VASc + HASBLED display (#22, #34) ───────────────────────────────
+function renderCha2ds2(cha2ds2, hasbled) {
+  if (!el.cha2ds2Box) return;
+  if (!cha2ds2) { el.cha2ds2Box.innerHTML = "<p class='muted'>Chưa có dữ liệu hồ sơ.</p>"; return; }
+  const c = cha2ds2.score >= 4 ? "danger" : cha2ds2.score >= 2 ? "warn" : "safe";
+  const hc = hasbled?.score >= 3 ? "danger" : "safe";
+  el.cha2ds2Box.innerHTML = `
+    <div class="list-item"><span>CHA2DS2-VASc</span><strong class="badge ${c}">${cha2ds2.score} – ${cha2ds2.riskLevel}</strong></div>
+    <div class="list-item"><span>Khuyến cáo</span><strong>${cha2ds2.anticoagRecommend}</strong></div>
+    ${hasbled ? `<div class="list-item"><span>HAS-BLED</span><strong class="badge ${hc}">${hasbled.score} – ${hasbled.riskLevel}</strong></div>
+    ${hasbled.note ? `<p class="muted" style="color:var(--danger)">${hasbled.note}</p>` : ""}` : ""}`;
+}
+
+// ─── BP Trend display (#33) ───────────────────────────────────────────────────
+function renderBpTrend(bpTrend) {
+  if (!el.bpTrendBox) return;
+  if (!bpTrend?.points?.length) { el.bpTrendBox.innerHTML = "<p class='muted'>Chưa có dữ liệu huyết áp.</p>"; return; }
+  const last = bpTrend.points[bpTrend.points.length - 1];
+  const c = last.systolic >= 180 ? "danger" : last.systolic >= 150 ? "warn" : "safe";
+  el.bpTrendBox.innerHTML = `
+    <div class="list-item"><span>Huyết áp mới nhất</span><strong class="badge ${c}">${last.systolic} mmHg</strong></div>
+    <div class="list-item"><span>Lần đo</span><strong>${new Date(last.date).toLocaleString("vi-VN")}</strong></div>
+    ${bpTrend.alert ? `<p class="muted" style="color:var(--danger);font-weight:700">${bpTrend.alert}</p>` : ""}
+    <div class="list-item"><span>Lịch sử</span><strong>${bpTrend.points.length} điểm dữ liệu</strong></div>`;
+  if (bpTrend.alert) showToast(bpTrend.alert, "error", 6000);
+}
+
+// ─── Circadian pattern display (#28) — mini bar chart theo giờ ───────────────
+function renderCircadian(circadian) {
+  if (!el.circadianBox) return;
+  if (!circadian || !circadian.hours?.length) {
+    el.circadianBox.innerHTML = "<p class='muted'>Cần ≥5 lần đo để phân tích nhịp sinh học.</p>";
+    return;
+  }
+  const peak = circadian.peakHour;
+  const hours = circadian.hours;
+  const maxBpm = Math.max(...hours.map(h => h.avgBpm), 1);
+  const minBpm = Math.min(...hours.map(h => h.avgBpm));
+  const bars = hours.map(h => {
+    const heightPct = Math.max(8, Math.round((h.avgBpm - minBpm + 10) / (maxBpm - minBpm + 10) * 100));
+    const isPeak = peak && h.hour === peak.hour;
+    return `<div class="circadian-bar${isPeak ? " peak" : ""}" style="height:${heightPct}%" title="${h.hour}h: ${h.avgBpm} BPM"><span class="bar-tip">${h.hour}h<br>${h.avgBpm} BPM</span></div>`;
+  }).join("");
+  const labels = hours.map(h => `<span>${h.hour}h</span>`).join("");
+  el.circadianBox.innerHTML = `
+    <div class="list-item"><span>Giờ nhịp tim cao nhất</span><strong>${peak ? peak.hour + "h (" + peak.avgBpm + " BPM)" : "--"}</strong></div>
+    <div class="list-item"><span>Số giờ có dữ liệu</span><strong>${hours.length} / 24 giờ</strong></div>
+    <div class="circadian-bar-chart">${bars}</div>
+    <div class="circadian-hour-labels">${labels}</div>`;
+}
+
+// ─── Poincaré display (#24) ───────────────────────────────────────────────────
+function renderPoincare(result) {
+  if (!el.poincareBox || !result) return;
+  const sd1 = result.sd1 || 0, sd2 = result.sd2 || 0;
+  const ratio = sd2 > 0 ? Math.round((sd1 / sd2) * 1000) / 1000 : 0;
+  if (!sd1 && !sd2) { el.poincareBox.innerHTML = "<p class='muted'>Cần ≥4 khoảng RR.</p>"; return; }
+  const c = ratio > 0.85 ? "warn" : "safe";
+  el.poincareBox.innerHTML = `
+    <div class="list-item"><span>SD1 (ms)</span><strong>${sd1}</strong></div>
+    <div class="list-item"><span>SD2 (ms)</span><strong>${sd2}</strong></div>
+    <div class="list-item"><span>SD1/SD2</span><strong class="badge ${c}">${ratio} ${ratio > 0.85 ? "⚠️ AFib indicator" : "✓"}</strong></div>`;
+}
+
+// ─── SampEn + LF/HF display (#23, #26) ───────────────────────────────────────
+function renderSampEn(result) {
+  if (!el.sampEnBox || !result) return;
+  const sampEn = result.sampEn || 0;
+  const lfhf = result.lfhfRatio;
+  if (!sampEn) { el.sampEnBox.innerHTML = "<p class='muted'>Cần ≥12 khoảng RR để tính SampEn.</p>"; return; }
+  const sc = sampEn > 0.9 ? "warn" : "safe";
+  el.sampEnBox.innerHTML = `
+    <div class="list-item"><span>Sample Entropy</span><strong class="badge ${sc}">${sampEn} ${sampEn > 0.9 ? "⚠️ Cao" : "✓"}</strong></div>
+    ${lfhf !== null && lfhf !== undefined ? `<div class="list-item"><span>LF/HF ratio</span><strong>${lfhf}</strong></div>` : ""}`;
+}
+
+// ─── Waveform peak annotations (#31) ─────────────────────────────────────────
+function renderWaveformWithPeaks(waveform, rrIntervals) {
+  if (!el.wavePath) return;
+  buildWavePath(waveform);
+  // Remove old peak circles
+  const chart = document.querySelector("#waveChart");
+  if (!chart) return;
+  chart.querySelectorAll(".peak-circle").forEach(c => c.remove());
+  if (!waveform?.length || !rrIntervals?.length) return;
+  // Estimate peak positions from RR intervals
+  const width = 600, height = 180;
+  const n = waveform.length;
+  let pos = 0;
+  const meanRR = rrIntervals.reduce((a, b) => a + b, 0) / rrIntervals.length;
+  const mean = waveform.reduce((a, b) => a + b, 0) / n;
+  for (const rr of rrIntervals.slice(0, 15)) {
+    const nextPos = pos + Math.round(rr / meanRR * (n / rrIntervals.length));
+    const x = (nextPos / Math.max(1, n - 1)) * width;
+    // Find local max near expected peak
+    const start = Math.max(0, nextPos - 3), end = Math.min(n - 1, nextPos + 3);
+    let maxVal = -Infinity, maxIdx = nextPos;
+    for (let i = start; i <= end; i++) { if (waveform[i] > maxVal) { maxVal = waveform[i]; maxIdx = i; } }
+    const y = height - maxVal * 1.4;
+    const deviation = rrIntervals.length > 1 ? Math.abs(rr - meanRR) / meanRR : 0;
+    const color = deviation > 0.40 ? "#ef4444" : deviation > 0.20 ? "#f59e0b" : "#22c55e";
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", x.toFixed(1));
+    circle.setAttribute("cy", y.toFixed(1));
+    circle.setAttribute("r", "4");
+    circle.setAttribute("fill", color);
+    circle.setAttribute("opacity", "0.85");
+    circle.setAttribute("class", "peak-circle");
+    chart.appendChild(circle);
+    pos = nextPos;
+  }
+}
+
 function renderMeasurementResult(record) {
   if (!record?.result) return;
   const r = record.result;
@@ -1092,9 +1440,11 @@ function renderMeasurementResult(record) {
     : "";
   el.resultDescription.textContent = `${r.baselineStatus}. Độ tin cậy ${r.confidence}% – Chất lượng ${r.signalQuality}%${qualityNote}.`;
   renderRecommendationBox(r.recommendation);
-  buildWavePath(r.waveform || []);
+  renderWaveformWithPeaks(r.waveform || [], r.rrIntervals || []); // #31 peak annotations
   renderShockIndex(r.shockIndex);
   renderHrvAdvanced(r);
+  renderPoincare(r); // #24
+  renderSampEn(r);   // #23
   el.abnormalPromptBox.classList.toggle("hidden", cls !== "elevated");
 }
 
@@ -1108,6 +1458,25 @@ function renderProfile(user) {
   el.guardianStatus.textContent = g.status === "confirmation_sent"
     ? `Guardian: ${g.guardianName || "Đã thiết lập"} – ${g.guardianEmail || g.guardianPhone || "chưa rõ"}`
     : "Chưa thiết lập guardian.";
+  const sched = g.reportSchedule || {};
+  if (el.notifyOnMeasurement) el.notifyOnMeasurement.checked = !!sched.notifyOnMeasurement;
+  if (el.autoReportEnabled) el.autoReportEnabled.checked = !!sched.enabled;
+  if (el.autoReportTime) el.autoReportTime.value = sched.time || "08:00";
+  if (el.autoReportScheduleStatus) {
+    if (!g.guardianEmail) {
+      el.autoReportScheduleStatus.textContent = "Cần cấu hình email guardian trước.";
+    } else {
+      const parts = [];
+      if (sched.notifyOnMeasurement) parts.push("Báo ngay sau đo");
+      if (sched.enabled) parts.push(`Tổng hợp lúc ${sched.time}`);
+      const lastSentText = sched.lastSentAt
+        ? ` · Gửi lần cuối: ${new Date(sched.lastSentAt).toLocaleString("vi-VN")}`
+        : "";
+      el.autoReportScheduleStatus.textContent = parts.length
+        ? `Đang bật: ${parts.join(" + ")}${lastSentText}`
+        : "Chưa bật tính năng tự động nào.";
+    }
+  }
 }
 
 function renderBaseline(baseline = { sessions: [] }) {
@@ -1139,9 +1508,33 @@ function renderSymptoms(symptoms = []) {
 }
 
 function renderReminders(reminders = []) {
-  el.reminderList.innerHTML = reminders.length
-    ? reminders.map((r) => `<div class="list-item"><span>${r.time}</span><strong>${r.medicineName}${r.pillColor ? " – " + r.pillColor : ""}${r.dose ? " (" + r.dose + ")" : ""}</strong></div>`).join("")
-    : "<p class='muted'>Chưa có lịch nhắc thuốc.</p>";
+  if (!reminders.length) { el.reminderList.innerHTML = "<p class='muted'>Chưa có lịch nhắc thuốc.</p>"; return; }
+  const todayKey = new Date().toISOString().slice(0, 10);
+  el.reminderList.innerHTML = reminders.map((r) => {
+    const taken = r.adherence?.[todayKey] === true;
+    return `<div class="list-item" data-reminder-id="${r.id}">
+      <span>${r.time}</span>
+      <strong>${r.medicineName}${r.pillColor ? " – " + r.pillColor : ""}${r.dose ? " (" + r.dose + ")" : ""}</strong>
+      <button class="confirm-pill-btn ${taken ? "btn-taken" : "ghost-btn"}" data-reminder-id="${r.id}" type="button" style="margin-left:8px;font-size:11px;padding:2px 8px">
+        ${taken ? "✅ Đã uống" : "Xác nhận uống"}
+      </button>
+    </div>`;
+  }).join("");
+  // Bind confirm buttons
+  el.reminderList.querySelectorAll(".confirm-pill-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const reminderId = btn.dataset.reminderId;
+      const today = new Date().toISOString().slice(0, 10);
+      try {
+        const r = await api("/api/medications/adherence", {
+          method: "POST",
+          body: JSON.stringify({ token: state.token, reminderId, date: today, taken: true }),
+        });
+        btn.textContent = "✅ Đã uống"; btn.className = "btn-taken";
+        showToast(`Đã xác nhận uống thuốc hôm nay (${r.adherencePct}% tuần này)`, "success");
+      } catch (err) { showToast(err.message, "error"); }
+    });
+  });
 }
 
 function renderWeeklyReport(report = {}) {
@@ -1194,6 +1587,8 @@ function renderDashboard(dashboard) {
   state.dashboard = dashboard;
   state.user = dashboard.user;
   setReportLink();
+  // #36: Show Quick-Start button when logged in
+  if (el.quickStartBtn) el.quickStartBtn.hidden = false;
   renderProfile(dashboard.user);
   renderBaseline(dashboard.user.baseline);
   renderHistory(dashboard.measurements || []);
@@ -1209,6 +1604,9 @@ function renderDashboard(dashboard) {
   renderThermalStrain(dashboard.thermalStrain);
   renderAfibDiseaseLog(dashboard.afibDisease);
   renderPillProtocol(dashboard.pillProtocol);
+  renderCha2ds2(dashboard.cha2ds2, dashboard.hasbled); // #22, #34
+  renderBpTrend(dashboard.bpTrend);                   // #33
+  renderCircadian(dashboard.circadian);               // #28
   if (dashboard.latestMeasurement) { state.lastMeasurementRecord = dashboard.latestMeasurement; renderMeasurementResult(dashboard.latestMeasurement); }
   if (dashboard.latestBreathing?.result) { el.breathingStatus.textContent = `+${dashboard.latestBreathing.result.coherenceGain} coherence`; el.breathingStatus.className = "badge safe"; }
   const guardianEmail = dashboard.user?.guardian?.guardianEmail;
@@ -1216,10 +1614,18 @@ function renderDashboard(dashboard) {
     el.parentReportStatus.textContent = guardianEmail ? `Email mắt thần: ${guardianEmail}` : "";
   }
   if (el.remoteParentInfoStatus) {
-    el.remoteParentInfoStatus.textContent = guardianEmail
-      ? `Đã cấu hình – ${guardianEmail}`
-      : "Chưa cấu hình email guardian.";
-    el.remoteParentInfoStatus.className = guardianEmail ? "badge safe" : "muted";
+    const sched = dashboard.user?.guardian?.reportSchedule || {};
+    if (!guardianEmail) {
+      el.remoteParentInfoStatus.textContent = "⚠️ Chưa cấu hình email người thân. Điền vào form Người giám hộ ở trên.";
+      el.remoteParentInfoStatus.style.cssText = "font-size:12px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:5px 8px;margin-bottom:10px;word-break:break-all";
+    } else if (sched.notifyOnMeasurement || sched.enabled) {
+      const modes = [sched.notifyOnMeasurement ? "📲 Báo ngay sau đo" : null, sched.enabled ? `🕐 Tổng hợp lúc ${sched.time}` : null].filter(Boolean);
+      el.remoteParentInfoStatus.textContent = `✅ ${modes.join(" + ")} → ${guardianEmail}`;
+      el.remoteParentInfoStatus.style.cssText = "font-size:12px;color:#059669;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:5px 8px;margin-bottom:10px;word-break:break-all";
+    } else {
+      el.remoteParentInfoStatus.textContent = `📧 Email: ${guardianEmail} — Tick chọn chế độ gửi bên dưới rồi bấm Lưu.`;
+      el.remoteParentInfoStatus.style.cssText = "font-size:12px;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:5px 8px;margin-bottom:10px;word-break:break-all";
+    }
   }
 }
 
@@ -1284,6 +1690,7 @@ function logout() {
   state.token = ""; state.user = null; state.dashboard = null;
   localStorage.removeItem(HEARTSENSE_TOKEN_KEY);
   if (state.dashboardPoll) { clearInterval(state.dashboardPoll); state.dashboardPoll = null; }
+  if (el.quickStartBtn) el.quickStartBtn.hidden = true; // #36
   setReportLink(); setAuthState("Đã đăng xuất.");
 }
 
@@ -1296,6 +1703,30 @@ async function saveGuardian(event) {
     el.guardianStatus.textContent = response.messages.join(" ");
     await loadDashboard();
   } catch (err) { setAuthState(err.message, "error"); }
+}
+
+async function saveSchedule(event) {
+  event.preventDefault();
+  if (!state.token) { setAuthState("Cần đăng nhập trước.", "error"); return; }
+  const form = new FormData(event.currentTarget);
+  const btn = event.currentTarget.querySelector("button[type=submit]");
+  try {
+    if (btn) btn.textContent = "Đang lưu...";
+    await api("/api/guardian", { method: "PUT", body: JSON.stringify({ token: state.token, ...Object.fromEntries(form.entries()) }) });
+    if (el.autoReportScheduleStatus) {
+      const enabled = form.get("autoReportEnabled") === "on";
+      const notify = form.get("notifyOnMeasurement") === "on";
+      const time = form.get("autoReportTime") || "08:00";
+      const parts = [notify ? "Báo ngay sau đo" : null, enabled ? `Tổng hợp lúc ${time}` : null].filter(Boolean);
+      el.autoReportScheduleStatus.textContent = parts.length ? `Đã bật: ${parts.join(" + ")}` : "Đã tắt tất cả.";
+    }
+    if (btn) btn.textContent = "✅ Đã lưu!";
+    setTimeout(() => { if (btn) btn.textContent = "💾 Lưu cài đặt tự động"; }, 2000);
+    await loadDashboard();
+  } catch (err) {
+    if (btn) btn.textContent = "💾 Lưu cài đặt tự động";
+    setAuthState(err.message, "error");
+  }
 }
 
 async function recordBaseline() {
@@ -1402,14 +1833,40 @@ function startSosCountdown(reason) {
 
 async function triggerSos(reason = "Người dùng kích hoạt") {
   if (!state.token) { setAuthState("Cần đăng nhập để kích hoạt SOS.", "error"); return; }
-  if (state.sosSending) return; // chống double-trigger
+  if (state.sosSending) return;
   state.sosSending = true;
+
+  // #32: Try to get geolocation when SOS triggered
+  let location = null;
   try {
-    const r = await api("/api/sos/trigger", { method: "POST", body: JSON.stringify({ token: state.token, reason }) });
+    if ("geolocation" in navigator) {
+      location = await new Promise((res) => {
+        navigator.geolocation.getCurrentPosition(
+          pos => res(`${pos.coords.latitude.toFixed(5)},${pos.coords.longitude.toFixed(5)}`),
+          () => res(null),
+          { timeout: 4000, maximumAge: 60000 }
+        );
+      });
+    }
+  } catch {}
+
+  // #32: Show guardian call button
+  if (state.user?.guardian?.guardianPhone && el.guardianCallBtn) {
+    el.guardianCallBtn.hidden = false;
+    el.guardianCallBtn.href = `tel:${state.user.guardian.guardianPhone}`;
+    el.guardianCallBtn.textContent = `📞 Gọi cho ${state.user.guardian.guardianName || "người thân"}`;
+  }
+
+  try {
+    const r = await api("/api/sos/trigger", {
+      method: "POST",
+      body: JSON.stringify({ token: state.token, reason, location }),
+    });
     el.sosBadge.textContent = "SOS đã gửi"; el.sosBadge.className = "badge danger";
     renderSosBox("Hành lang xanh đã kích hoạt.", r.messages);
     notify("HEARTSENSE", "SOS đã gửi.");
     playAlarmTone(); renderDashboard(r.dashboard);
+    showToast("SOS đã gửi đến người thân!", "error", 5000);
   } catch (err) { setAuthState(err.message, "error"); }
   finally { setTimeout(() => { state.sosSending = false; }, 5000); }
 }
@@ -1431,6 +1888,19 @@ async function saveAbnormalReason(reason) {
     const r = await api("/api/measurements/context", { method: "POST", body: JSON.stringify({ token: state.token, measurementId: state.lastMeasurementRecord.id, reason }) });
     el.abnormalPromptBox.classList.add("hidden"); renderDashboard(r.dashboard);
   } catch (err) { setAuthState(err.message, "error"); }
+}
+
+// ─── Quick-Start Mode (#36) ───────────────────────────────────────────────────
+async function quickStart() {
+  if (!state.user) return;
+  // Auto-detect mode
+  const mode = isMobile() ? "finger" : "face";
+  setMeasurementMode(mode);
+  // Scroll to measurement section
+  document.querySelector("#measurementSection")?.scrollIntoView({ behavior: "smooth" });
+  // Start camera and measure immediately
+  if (!state.stream) await startCamera();
+  if (state.stream) await runMeasurement();
 }
 
 // ─── Breathing Coach ──────────────────────────────────────────────────────────
@@ -1538,15 +2008,20 @@ async function savePillProtocol(event) {
 // ─── Remote Parent ────────────────────────────────────────────────────────────
 async function sendParentReport() {
   if (!state.token || !state.user) { setAuthState("Cần đăng nhập.", "error"); return; }
+  const personalMessage = el.parentReportMessage?.value?.trim() || "";
   try {
     if (el.parentReportStatus) el.parentReportStatus.textContent = "Đang gửi...";
     if (el.remoteParentInfoStatus) { el.remoteParentInfoStatus.textContent = "Đang gửi báo cáo..."; el.remoteParentInfoStatus.className = "muted"; }
-    const r = await api(`/api/users/${state.user.id}/remote-parent/send`, { method: "POST", body: JSON.stringify({ token: state.token }) });
+    const r = await api(`/api/users/${state.user.id}/remote-parent/send`, {
+      method: "POST",
+      body: JSON.stringify({ token: state.token, personalMessage }),
+    });
     if (el.parentReportStatus) el.parentReportStatus.textContent = r.message;
     if (el.remoteParentInfoStatus) {
       el.remoteParentInfoStatus.textContent = r.sent ? `Đã gửi lúc ${new Date().toLocaleTimeString("vi-VN")}` : `Lỗi: ${r.message}`;
       el.remoteParentInfoStatus.className = r.sent ? "badge safe" : "badge warn";
     }
+    if (r.sent && el.parentReportMessage) el.parentReportMessage.value = "";
   } catch (err) {
     if (el.parentReportStatus) el.parentReportStatus.textContent = `Lỗi: ${err.message}`;
     if (el.remoteParentInfoStatus) { el.remoteParentInfoStatus.textContent = `Lỗi: ${err.message}`; el.remoteParentInfoStatus.className = "badge warn"; }
@@ -1575,6 +2050,7 @@ function bindEvents() {
   el.loginForm.addEventListener("submit", handleLogin);
   el.logoutBtn.addEventListener("click", logout);
   el.guardianForm.addEventListener("submit", saveGuardian);
+  el.scheduleForm?.addEventListener("submit", saveSchedule);
   el.recordBaselineBtn.addEventListener("click", recordBaseline);
   el.refreshDashboardBtn.addEventListener("click", () => loadDashboard(true));
   el.startCameraBtn.addEventListener("click", startCamera);
@@ -1599,11 +2075,16 @@ function bindEvents() {
   el.interactionForm?.addEventListener("submit", checkInteractions);
   el.pillProtocolForm?.addEventListener("submit", savePillProtocol);
   el.sendParentReportBtn?.addEventListener("click", sendParentReport);
+  // New bindings
+  el.quickStartBtn?.addEventListener("click", quickStart); // #36
+  window.addEventListener("online", updateOnlineStatus);   // #35
+  window.addEventListener("offline", updateOnlineStatus);  // #35
 }
 
 async function init() {
   detectPlatform(); renderQrFallback(); bindPwa(); bindEvents();
   setMeasurementMode("finger");
+  updateOnlineStatus(); // #35
   await checkHealth(); await loadCameraDevices(); await restoreSession();
 }
 

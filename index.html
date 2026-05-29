@@ -10,6 +10,12 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <!-- Toast Container (#20) -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Offline Indicator (#35) -->
+    <div id="offlineIndicator" class="offline-bar" hidden>📡 Không có mạng – Đang lưu ngoại tuyến</div>
+
     <!-- Top Medical Status Bar -->
     <div class="top-status-bar">
       <div class="top-bar-inner">
@@ -32,6 +38,8 @@
             <button id="installBtn" class="ghost-btn" type="button" hidden>Cài đặt PWA</button>
             <button id="requestNotificationBtn" class="secondary-btn" type="button">🔔 Bật thông báo</button>
             <a class="primary-btn" href="#measurementSection">💓 Bắt đầu đo tim</a>
+            <!-- Quick-Start Button (#36) -->
+            <button id="quickStartBtn" class="primary-btn quick-start-btn" type="button" hidden style="font-size:1.1rem;padding:14px 28px;background:#cc2244">💓 ĐO NGAY</button>
           </div>
         </div>
         <div class="hero-panel">
@@ -95,14 +103,11 @@
               <label>Tên người thân <input name="guardianName" type="text" placeholder="Trần Thị B (con)" /></label>
               <label>Số điện thoại <input name="guardianPhone" type="text" placeholder="0901234567" /></label>
               <label>Email người thân <input name="guardianEmail" type="email" placeholder="con@example.com" /></label>
-              <button class="primary-btn" type="submit">Lưu người giám hộ</button>
+              <button class="primary-btn" type="submit">💾 Lưu người giám hộ</button>
               <div id="guardianStatus" class="muted">Chưa thiết lập người giám hộ.</div>
-              <div class="button-row" style="margin-top:10px">
-                <button id="sendParentReportBtn" class="secondary-btn" type="button">📨 Gửi báo cáo hôm nay cho con</button>
-              </div>
-              <div id="parentReportStatus" class="muted"></div>
             </form>
           </div>
+
 
           <!-- Heart-Print Baseline -->
           <div class="baseline-grid">
@@ -181,6 +186,15 @@
               </div>
 
               <p id="modeDescription" class="muted">Web ưu tiên Face PPG bằng webcam. Nếu không có webcam, cài PWA trên mobile.</p>
+
+              <!-- Pre-measurement Checklist (#29) -->
+              <div id="preMeasurementChecklist" class="checklist-box">
+                <strong style="font-size:13px;display:block;margin-bottom:6px">✅ Trước khi đo (khuyến nghị)</strong>
+                <label><input type="checkbox" id="checkSit" /> Đã ngồi nghỉ ≥5 phút</label>
+                <label><input type="checkbox" id="checkCoffee" /> Không uống cà phê trong 1 giờ qua</label>
+                <label><input type="checkbox" id="checkExercise" /> Không vận động mạnh trong 30 phút qua</label>
+                <p class="muted" style="font-size:11px;margin-top:4px">Nếu chưa đáp ứng, kết quả vẫn được lưu nhưng ngưỡng cảnh báo sẽ được điều chỉnh.</p>
+              </div>
 
               <div class="measurement-inputs">
                 <label>Huyết áp tâm thu (mmHg) <input id="systolicInput" type="number" min="80" max="220" value="128" /></label>
@@ -306,6 +320,8 @@
             </div>
             <div class="button-row">
               <button id="callEmergencyBtn" class="primary-btn" type="button">📞 Gọi 115</button>
+              <!-- Guardian call button (#32) -->
+              <a id="guardianCallBtn" class="secondary-btn" href="#" hidden>📞 Gọi người thân</a>
               <a class="ghost-btn" href="https://www.google.com/maps/search/benh+vien+tim+gan+nhat" target="_blank" rel="noreferrer">🗺 Bản đồ BV Tim</a>
             </div>
             <p id="autoplayHint" class="muted">Trên web, nếu tab bị tắt tiếng, hãy cho phép âm thanh để cảnh báo SOS hoạt động.</p>
@@ -332,6 +348,41 @@
             <article class="info-panel">
               <div class="panel-head"><h3>📋 Bệnh án Rung nhĩ</h3><span class="badge neutral">Episode Tracker</span></div>
               <div id="afibDiseaseLog" class="list-box"><p class="muted">Ghi tự động mỗi cơn rung nhĩ: tần suất, thời điểm, nhịp tim. Cung cấp cho bác sĩ làm căn cứ điều trị.</p></div>
+            </article>
+          </div>
+
+          <!-- New AI boxes: CHA2DS2, HAS-BLED, BP Trend, Circadian, SampEn, Poincaré -->
+          <div class="results-grid" style="margin-top:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>⚕️ CHA2DS2-VASc &amp; HAS-BLED</h3><span class="badge neutral">Điểm nguy cơ</span></div>
+              <div id="cha2ds2Box" class="list-box"><p class="muted">Điểm nguy cơ đột quỵ và chảy máu theo tiêu chuẩn ESC.</p></div>
+            </article>
+
+            <article class="info-panel">
+              <div class="panel-head"><h3>🩺 Xu hướng huyết áp (BP Trend)</h3><span class="badge neutral">Theo thời gian</span></div>
+              <div id="bpTrendBox" class="list-box"><p class="muted">Theo dõi huyết áp tâm thu qua các lần đo. Cảnh báo khi ≥180 mmHg.</p></div>
+            </article>
+
+            <article class="info-panel">
+              <div class="panel-head"><h3>🕐 Nhịp sinh học (Circadian)</h3><span class="badge neutral">Phân tích theo giờ</span></div>
+              <div id="circadianBox" class="list-box"><p class="muted">Phân tích nhịp tim theo giờ trong ngày. Phát hiện giờ nhịp cao nhất.</p></div>
+            </article>
+          </div>
+
+          <div class="results-grid" style="margin-top:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>📐 Poincaré SD1/SD2</h3><span class="badge neutral">HRV nâng cao</span></div>
+              <div id="poincareBox" class="list-box"><p class="muted">SD1/SD2 &gt; 0.85 là chỉ số nghi ngờ AFib mạnh.</p></div>
+            </article>
+
+            <article class="info-panel">
+              <div class="panel-head"><h3>🔢 Sample Entropy &amp; LF/HF</h3><span class="badge neutral">Độ phức tạp tín hiệu</span></div>
+              <div id="sampEnBox" class="list-box"><p class="muted">SampEn &gt; 0.9 kết hợp CV cao → tăng độ tin cậy AFib.</p></div>
+            </article>
+
+            <article class="info-panel">
+              <div class="panel-head"><h3>🌍 So sánh với dân số</h3><span class="badge neutral">Population Benchmark</span></div>
+              <div id="populationBenchmarkBox" class="list-box"><p class="muted">So sánh nhịp tim và HRV của bạn với người cùng độ tuổi.</p></div>
             </article>
           </div>
         </section>
@@ -446,14 +497,53 @@
               <div id="interactionResult" class="list-box"><p class="muted">Kết quả kiểm tra sẽ hiện ở đây.</p></div>
             </article>
 
-            <article class="info-panel">
-              <div class="panel-head"><h3>👁 Mắt thần cho con xa</h3><span class="badge neutral">Remote Parent</span></div>
-              <p class="muted">Con ở Sài Gòn, bố mẹ ở Hà Nội. Hàng ngày con nhận báo cáo: "Hôm nay bố đo lúc 7h, nhịp tim 72 (ổn)". Nếu bố quên đo 2 ngày → app nhắc con gọi về.</p>
-              <div class="list-box">
-                <div class="list-item"><span>Báo cáo hàng ngày</span><strong>Email tự động đến con</strong></div>
-                <div class="list-item"><span>Trạng thái</span><strong id="remoteParentInfoStatus" class="badge neutral">Thiết lập email guardian để kích hoạt</strong></div>
+            <article class="info-panel" style="overflow:visible">
+              <div class="panel-head"><h3>👁 Mắt thần cho con xa</h3></div>
+              <p class="muted" style="margin-bottom:6px">Tự động gửi báo cáo sức khoẻ đến người thân. Nếu phát hiện AFib → cảnh báo ngay.</p>
+              <div id="remoteParentInfoStatus" style="font-size:12px;color:#059669;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:5px 8px;margin-bottom:10px;word-break:break-all"></div>
+
+              <!-- Cài lịch tự động -->
+              <form id="scheduleForm">
+                <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#1e3a5f">📅 Cài lịch tự động gửi Email</p>
+
+                <div style="margin-bottom:6px;padding:8px 10px;background:#f0f7ff;border-radius:8px;border:1px solid #bfdbfe;display:flex;align-items:flex-start;gap:8px">
+                  <input type="checkbox" name="notifyOnMeasurement" id="notifyOnMeasurement" onclick="event.stopPropagation()" style="width:16px;height:16px;min-width:16px;margin-top:3px;cursor:pointer;accent-color:#2563eb" />
+                  <div onclick="document.getElementById('notifyOnMeasurement').click();event.stopPropagation()" style="cursor:pointer;flex:1">
+                    <div style="font-size:13px;font-weight:600;color:#1e3a5f">📲 Báo ngay sau mỗi lần đo xong</div>
+                    <div style="font-size:11px;color:#6b7280;margin-top:2px">Gửi kết quả + đánh giá nguy cơ tức thì</div>
+                  </div>
+                </div>
+
+                <div style="margin-bottom:10px;padding:8px 10px;background:#f0f7ff;border-radius:8px;border:1px solid #bfdbfe">
+                  <div style="display:flex;align-items:flex-start;gap:8px">
+                    <input type="checkbox" name="autoReportEnabled" id="autoReportEnabled" onclick="event.stopPropagation()" style="width:16px;height:16px;min-width:16px;margin-top:3px;cursor:pointer;accent-color:#2563eb" />
+                    <div onclick="document.getElementById('autoReportEnabled').click();event.stopPropagation()" style="cursor:pointer;flex:1">
+                      <div style="font-size:13px;font-weight:600;color:#1e3a5f">🕐 Báo cáo tổng hợp hàng ngày</div>
+                      <div style="font-size:11px;color:#6b7280;margin-top:2px">Tóm tắt 7 ngày, gửi đúng giờ đã hẹn</div>
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:8px;margin-left:24px">
+                    <span style="font-size:12px;color:#374151;white-space:nowrap">⏰ Giờ gửi:</span>
+                    <input name="autoReportTime" id="autoReportTime" type="time" value="08:00" onclick="event.stopPropagation()" style="width:auto;padding:4px 8px;border:1px solid #93c5fd;border-radius:6px;font-size:13px;background:#fff" />
+                  </div>
+                </div>
+
+                <div id="autoReportScheduleStatus" style="font-size:12px;color:#4b5563;margin-bottom:8px;min-height:14px"></div>
+
+                <button type="submit" style="width:100%;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:block">
+                  💾 Lưu cài đặt tự động
+                </button>
+              </form>
+
+              <!-- Gửi báo cáo thủ công -->
+              <div style="margin-top:12px;padding-top:12px;border-top:1px solid #e5e7eb">
+                <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#1e3a5f">📨 Gửi báo cáo ngay hôm nay</p>
+                <textarea id="parentReportMessage" placeholder="💬 Kèm lời nhắn: Con đang ổn, bố/mẹ đừng lo nhé!" rows="2" style="width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid #d1d5db;border-radius:7px;font-size:12px;resize:vertical;display:block;font-family:inherit;margin-bottom:7px"></textarea>
+                <button id="sendParentReportBtn" type="button" style="width:100%;padding:10px;background:#0f766e;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;display:block">
+                  📨 Gửi ngay cho người thân
+                </button>
+                <div id="parentReportStatus" style="margin-top:6px;font-size:12px;color:#6b7280;min-height:14px"></div>
               </div>
-              <p class="muted" style="margin-top:8px">Thiết lập email người giám hộ ở trên để nhận báo cáo. Bấm nút "Gửi báo cáo hôm nay cho con" để gửi ngay.</p>
             </article>
           </div>
 
