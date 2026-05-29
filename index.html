@@ -436,7 +436,18 @@
             <article class="info-panel">
               <h3>📝 Nhật ký triệu chứng</h3>
               <form id="symptomForm" class="stack-form">
-                <label>Ghi chú nhanh <input name="note" type="text" placeholder="Hôm nay tức ngực, mệt, khó ngủ, hồi hộp..." required /></label>
+                <p style="font-size:13px;font-weight:600;color:#1e3a5f;margin:0 0 6px">Chọn triệu chứng đang gặp:</p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;margin-bottom:8px">
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="sym" value="hoi_hop" style="accent-color:#e11d48;width:15px;height:15px"> 💓 Hồi hộp / đập nhanh</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="sym" value="kho_tho" style="accent-color:#e11d48;width:15px;height:15px"> 😮‍💨 Khó thở</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="sym" value="chong_mat" style="accent-color:#e11d48;width:15px;height:15px"> 😵 Chóng mặt / choáng</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="sym" value="tuc_nguc" style="accent-color:#e11d48;width:15px;height:15px"> 🫀 Tức ngực / đau ngực</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="sym" value="met_moi" style="accent-color:#e11d48;width:15px;height:15px"> 😴 Mệt mỏi bất thường</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="sym" value="te_tay" style="accent-color:#e11d48;width:15px;height:15px"> 🤚 Tê tay / tê chân</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="sym" value="dau_dau" style="accent-color:#e11d48;width:15px;height:15px"> 🤕 Đau đầu dữ dội</label>
+                  <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="sym" value="ngat_xiu" style="accent-color:#e11d48;width:15px;height:15px"> ⚡ Gần ngất / ngất xỉu</label>
+                </div>
+                <label>Ghi chú thêm <input name="note" type="text" placeholder="Tự mô tả nếu không có trong danh sách..." /></label>
                 <button class="primary-btn" type="submit">Lưu nhật ký</button>
               </form>
               <div id="symptomList" class="list-box"><p class="muted">Chưa có nhật ký triệu chứng.</p></div>
@@ -479,9 +490,10 @@
                 <label>Tên thuốc <input name="medicineName" type="text" placeholder="Ví dụ: Flecainide 100mg" required /></label>
                 <label>Liều lượng <input name="dose" type="text" placeholder="Ví dụ: 1 viên uống ngay khi phát hiện AFib" required /></label>
                 <label>Hướng dẫn thêm <input name="instructions" type="text" placeholder="Uống trong vòng 30 phút sau khi phát hiện AFib" /></label>
-                <button class="primary-btn" type="submit">Lưu phác đồ Pill-in-Pocket</button>
+                <button class="primary-btn" type="submit">➕ Thêm phác đồ</button>
               </form>
-              <div id="pillProtocolStatus" class="muted">Chưa thiết lập phác đồ pill-in-pocket.</div>
+              <p class="muted" style="font-size:11px;margin-top:4px">Có thể thêm nhiều thuốc — tất cả sẽ hiện lên cùng lúc khi phát hiện AFib.</p>
+              <div id="pillProtocolStatus" class="list-box" style="margin-top:8px"><p class="muted">Chưa thiết lập phác đồ pill-in-pocket.</p></div>
             </article>
 
             <article class="info-panel">

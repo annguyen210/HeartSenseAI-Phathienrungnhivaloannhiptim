@@ -1094,7 +1094,7 @@ async function buildDashboard(userId) {
   const thermalStrain = calculateThermalStrain(weatherAlert?.currentTemp, latestBpm, baselineBpm);
 
   const pillProtocols = readJson("pillProtocols").filter((p) => p.userId === userId && p.active);
-  const pillProtocol = pillProtocols[0] || null;
+  const pillProtocol = pillProtocols[0] || null; // backward compat field
 
   // New analytics
   const cha2ds2 = calculateCha2ds2Vasc(user);
@@ -1119,6 +1119,7 @@ async function buildDashboard(userId) {
     strokePredictor,
     afibDisease,
     pillProtocol,
+    pillProtocols,
     cha2ds2,
     hasbled,
     circadian,
@@ -1535,15 +1536,20 @@ async function handleCreateMeasurement(urlObject, body, res) {
 
   const dashboard = await buildDashboard(user.id);
 
-  // Check pill-in-pocket trigger
+  // Check pill-in-pocket trigger — all active protocols
   let pillAlert = null;
-  if (result.classification === "afib" && user.pillProtocol?.active) {
-    pillAlert = {
-      triggered: true,
-      message: `Phat hien AFib! Uong thuoc theo phac do: ${user.pillProtocol.medicineName} ${user.pillProtocol.dose}`,
-      medicineName: user.pillProtocol.medicineName,
-      dose: user.pillProtocol.dose,
-    };
+  if (result.classification === "afib") {
+    const activeProtocols = readJson("pillProtocols").filter(p => p.userId === user.id && p.active);
+    if (activeProtocols.length > 0) {
+      const names = activeProtocols.map(p => p.medicineName).join(", ");
+      pillAlert = {
+        triggered: true,
+        protocols: activeProtocols.map(p => ({ medicineName: p.medicineName, dose: p.dose, instructions: p.instructions })),
+        message: activeProtocols.length === 1
+          ? `Phát hiện AFib! Uống thuốc: ${activeProtocols[0].medicineName} ${activeProtocols[0].dose}`
+          : `Phát hiện AFib! ${activeProtocols.length} thuốc theo phác đồ: ${names}`,
+      };
+    }
   }
 
   sendJson(res, 201, { measurement: record, dashboard, pillAlert });
@@ -1634,11 +1640,37 @@ async function handleSymptom(urlObject, body, res) {
   const session = getSessionFromRequest(urlObject, body);
   const user = getUserBySession(session);
   if (!user) { sendJson(res, 401, { error: "Cần đăng nhập." }); return; }
+
+  const SYMPTOM_LABELS = {
+    hoi_hop: "Hồi hộp/tim đập nhanh",
+    kho_tho: "Khó thở",
+    chong_mat: "Chóng mặt/choáng",
+    tuc_nguc: "Tức ngực/đau ngực",
+    met_moi: "Mệt mỏi bất thường",
+    te_tay: "Tê tay/tê chân",
+    dau_dau: "Đau đầu dữ dội",
+    ngat_xiu: "Gần ngất/ngất xỉu",
+  };
+  const CRITICAL_SYMPTOMS = new Set(["tuc_nguc", "ngat_xiu", "kho_tho"]);
+
+  const rawSymptoms = Array.isArray(body.symptoms)
+    ? body.symptoms.filter(s => SYMPTOM_LABELS[s])
+    : [];
+  const note = String(body.note || "").trim().slice(0, 300);
+  const isCritical = rawSymptoms.some(s => CRITICAL_SYMPTOMS.has(s));
+  const labels = rawSymptoms.map(s => SYMPTOM_LABELS[s]);
+  const displayNote = [...labels, ...(note ? [note] : [])].join(" | ") || "Ghi chú tự do";
+
   const symptoms = readJson("symptoms");
-  symptoms.push({ id: crypto.randomUUID(), userId: user.id, note: String(body.note || "").trim(), createdAt: new Date().toISOString() });
+  const entry = {
+    id: crypto.randomUUID(), userId: user.id,
+    symptoms: rawSymptoms, note: displayNote, isCritical,
+    createdAt: new Date().toISOString(),
+  };
+  symptoms.push(entry);
   writeJson("symptoms", symptoms);
-  appendLedgerEntry(user.id, "symptom.created", "Them nhat ky", { note: String(body.note || "").trim() });
-  sendJson(res, 201, { ok: true, dashboard: await buildDashboard(user.id) });
+  appendLedgerEntry(user.id, "symptom.created", "Them nhat ky trieu chung", { symptoms: rawSymptoms, isCritical });
+  sendJson(res, 201, { ok: true, isCritical, dashboard: await buildDashboard(user.id) });
 }
 
 async function handleReminder(urlObject, body, res) {
@@ -1793,20 +1825,36 @@ async function handleSavePillProtocol(urlObject, body, res) {
   const user = users.find((u) => u.id === session?.userId);
   if (!user) { sendJson(res, 401, { error: "Cần đăng nhập." }); return; }
 
-  const protocols = readJson("pillProtocols").filter((p) => p.userId !== user.id);
+  const allProtocols = readJson("pillProtocols");
+
+  // Delete action
+  if (body.action === "delete" && body.protocolId) {
+    const updated = allProtocols.filter(p => !(p.userId === user.id && p.id === body.protocolId));
+    writeJson("pillProtocols", updated);
+    const remaining = updated.filter(p => p.userId === user.id && p.active);
+    user.pillProtocol = remaining[0] || null;
+    writeJson("users", users);
+    sendJson(res, 200, { ok: true, dashboard: await buildDashboard(user.id) });
+    return;
+  }
+
+  // Add new protocol (keep existing ones — supports multiple)
+  const medicineName = String(body.medicineName || "").trim();
+  if (!medicineName) { sendJson(res, 400, { error: "Tên thuốc không được để trống." }); return; }
   const protocol = {
     id: crypto.randomUUID(), userId: user.id,
-    medicineName: String(body.medicineName || "").trim(),
+    medicineName,
     dose: String(body.dose || "").trim(),
     instructions: String(body.instructions || "").trim(),
-    active: Boolean(body.active !== false),
+    active: true,
     createdAt: new Date().toISOString(),
   };
-  protocols.push(protocol);
-  writeJson("pillProtocols", protocols);
-  user.pillProtocol = protocol;
+  allProtocols.push(protocol);
+  writeJson("pillProtocols", allProtocols);
+  const userProtocols = allProtocols.filter(p => p.userId === user.id && p.active);
+  user.pillProtocol = userProtocols[0] || null; // backward compat
   writeJson("users", users);
-  appendLedgerEntry(user.id, "pill_protocol.saved", "Luu phac do pill-in-pocket", { medicineName: protocol.medicineName });
+  appendLedgerEntry(user.id, "pill_protocol.saved", "Luu phac do pill-in-pocket", { medicineName: protocol.medicineName, total: userProtocols.length });
   sendJson(res, 201, { protocol, dashboard: await buildDashboard(user.id) });
 }
 
@@ -1832,91 +1880,113 @@ async function handleSendRemoteParentReport(urlObject, body, res) {
   sendJson(res, 200, { sent: emailResult.sent, message: emailResult.sent ? `Báo cáo đã gửi đến ${guardian.guardianEmail}` : `Chưa gửi được (${emailResult.reason})` });
 }
 
-// ─── Cron Scheduler (#7, #16) ─────────────────────────────────────────────────
-function startAutoReportScheduler() {
-  setInterval(async () => {
-    const nowUTC = new Date();
-    const vnNow = new Date(nowUTC.getTime() + 7 * 3600000); // UTC+7
-    const vnHour = vnNow.getUTCHours();
-    const vnMinute = vnNow.getUTCMinutes();
-    const vnDateStr = vnNow.toISOString().slice(0, 10);
-    const vnTimeStr = `${String(vnHour).padStart(2, "0")}:${String(vnMinute).padStart(2, "0")}`;
+// ─── Cron Scheduler (#7, #16, #Fix-E) ────────────────────────────────────────
+// Extracted so it can be called both by setInterval AND by /api/cron (external ping)
+async function runSchedulerCheck() {
+  const nowUTC = new Date();
+  const vnNow = new Date(nowUTC.getTime() + 7 * 3600000); // UTC+7
+  const vnHour = vnNow.getUTCHours();
+  const vnMinute = vnNow.getUTCMinutes();
+  const vnDateStr = vnNow.toISOString().slice(0, 10);
+  const vnTimeStr = `${String(vnHour).padStart(2, "0")}:${String(vnMinute).padStart(2, "0")}`;
+  const vnTotalMin = vnHour * 60 + vnMinute;
 
-    const users = readJson("users");
+  const users = readJson("users");
 
-    // ── Auto daily report ──────────────────────────────────────────────────────
-    for (const user of users) {
-      const schedule = user.guardian?.reportSchedule;
-      if (!schedule?.enabled || !user.guardian?.guardianEmail) continue;
-      const schedTime = schedule.time || "08:00";
-      if (vnTimeStr !== schedTime) continue;
-      if (schedule.lastSentDate === vnDateStr) continue; // #7: check lastSentDate
+  // ── Auto daily report ──────────────────────────────────────────────────────
+  for (const user of users) {
+    const schedule = user.guardian?.reportSchedule;
+    if (!schedule?.enabled || !user.guardian?.guardianEmail) continue;
+    if (schedule.lastSentDate === vnDateStr) continue; // already sent today
 
-      try {
-        const dashboard = await buildDashboard(user.id);
-        const latest = dashboard.latestMeasurement;
-        const status = latest?.result?.classification === "afib" ? "⚠️ CÓ CẢNH BÁO"
-          : latest?.result?.classification === "elevated" ? "Theo dõi" : "Bình thường";
-        const emailResult = await sendResendEmailWithRetry({ // #6
-          to: user.guardian.guardianEmail,
-          subject: `HEARTSENSE – Báo cáo tự động: ${escHtml(user.fullName)} – ${vnNow.toLocaleDateString("vi-VN")}`,
-          html: buildReportEmailHtml(user, latest, status, dashboard),
+    const schedTime = schedule.time || "08:00";
+    const [sh, sm] = schedTime.split(":").map(Number);
+    const schedTotalMin = sh * 60 + sm;
+
+    // Send at exact minute OR catch up if server was asleep (up to 23h55 window)
+    const isOnTime = vnTimeStr === schedTime;
+    const isMissed = vnTotalMin > schedTotalMin; // past scheduled time, not yet sent
+    if (!isOnTime && !isMissed) continue;
+
+    try {
+      const dashboard = await buildDashboard(user.id);
+      const latest = dashboard.latestMeasurement;
+      const status = latest?.result?.classification === "afib" ? "⚠️ CÓ CẢNH BÁO"
+        : latest?.result?.classification === "elevated" ? "Theo dõi" : "Bình thường";
+      const emailResult = await sendResendEmailWithRetry({
+        to: user.guardian.guardianEmail,
+        subject: `HEARTSENSE – Báo cáo tự động: ${escHtml(user.fullName)} – ${vnNow.toLocaleDateString("vi-VN")}`,
+        html: buildReportEmailHtml(user, latest, status, dashboard),
+      });
+      if (emailResult.sent) {
+        const allUsers = readJson("users");
+        const u = allUsers.find((x) => x.id === user.id);
+        if (u?.guardian?.reportSchedule) {
+          u.guardian.reportSchedule.lastSentDate = vnDateStr;
+          u.guardian.reportSchedule.lastSentAt = nowUTC.toISOString();
+          writeJson("users", allUsers);
+        }
+        appendLedgerEntry(user.id, "remote_parent.auto_sent", "Tu dong gui bao cao theo lich", { email: user.guardian.guardianEmail, scheduledTime: schedTime, catchUp: isMissed });
+        console.log(`[AutoReport] ${isMissed ? "[catch-up]" : ""} Gui den ${user.guardian.guardianEmail} cho ${user.fullName}`);
+      }
+    } catch (err) {
+      console.error(`[AutoReport] Loi user ${user.id}: ${err.message}`);
+    }
+  }
+
+  // ── Medication reminders ─────────────────────────────────────────────────────
+  const reminders = readJson("reminders");
+  for (const reminder of reminders) {
+    if (!reminder.time) continue;
+    const user = users.find(u => u.id === reminder.userId);
+    if (!user) continue;
+    const [rh, rm] = reminder.time.split(":").map(Number);
+    const remTotalMin = rh * 60 + rm;
+    const isOnTime = vnTimeStr === reminder.time;
+    const isMissed = vnTotalMin > remTotalMin && reminder.lastReminderDate !== vnDateStr;
+    if (!isOnTime && !isMissed) continue;
+    if (reminder.lastReminderDate === vnDateStr) continue;
+
+    try {
+      const guardianEmail = user.guardian?.guardianEmail;
+      if (guardianEmail) {
+        await sendResendEmailWithRetry({
+          to: guardianEmail,
+          subject: `HEARTSENSE – Nhắc thuốc: ${escHtml(reminder.medicineName)} – ${user.fullName}`,
+          html: `<div style="font-family:Arial;padding:20px;max-width:500px">
+            <h3 style="color:#0f766e">💊 Nhắc uống thuốc</h3>
+            <p><strong>Bệnh nhân:</strong> ${escHtml(user.fullName)}</p>
+            <p><strong>Thuốc:</strong> ${escHtml(reminder.medicineName)}</p>
+            <p><strong>Liều:</strong> ${escHtml(reminder.dose || "Theo chỉ định")}</p>
+            <p><strong>Giờ:</strong> ${escHtml(reminder.time)}</p>
+            ${reminder.pillColor ? `<p><strong>Màu viên:</strong> ${escHtml(reminder.pillColor)}</p>` : ""}
+            <p style="color:#999;font-size:11px">HEARTSENSE – Nhắc thuốc tự động</p>
+          </div>`,
         });
-        if (emailResult.sent) {
-          const allUsers = readJson("users");
-          const u = allUsers.find((x) => x.id === user.id);
-          if (u?.guardian?.reportSchedule) {
-            u.guardian.reportSchedule.lastSentDate = vnDateStr;
-            u.guardian.reportSchedule.lastSentAt = nowUTC.toISOString();
-            writeJson("users", allUsers);
-          }
-          appendLedgerEntry(user.id, "remote_parent.auto_sent", "Tu dong gui bao cao theo lich", { email: user.guardian.guardianEmail, scheduledTime: schedTime });
-          console.log(`[AutoReport] Gui den ${user.guardian.guardianEmail} cho ${user.fullName}`);
-        }
-      } catch (err) {
-        console.error(`[AutoReport] Loi user ${user.id}: ${err.message}`);
       }
+      reminder.lastReminderDate = vnDateStr;
+    } catch (err) {
+      console.error(`[MedReminder] Loi reminder ${reminder.id}: ${err.message}`);
     }
+  }
+  writeJson("reminders", reminders);
+}
 
-    // ── Medication reminders (#7, #16) ─────────────────────────────────────────
-    const reminders = readJson("reminders");
-    for (const reminder of reminders) {
-      if (!reminder.time || reminder.time !== vnTimeStr) continue;
-      // Find user
-      const user = users.find(u => u.id === reminder.userId);
-      if (!user) continue;
-      // Check if already sent today
-      if (reminder.lastReminderDate === vnDateStr) continue;
+function startAutoReportScheduler() {
+  setInterval(() => runSchedulerCheck().catch(err => console.error("[Cron]", err.message)), 60000);
+  console.log("[Cron] Scheduler khởi động – kiểm tra mỗi phút. Cũng nhận ping từ /api/cron.");
+}
 
-      try {
-        // Send email to guardian if configured
-        const guardianEmail = user.guardian?.guardianEmail;
-        if (guardianEmail) {
-          await sendResendEmailWithRetry({
-            to: guardianEmail,
-            subject: `HEARTSENSE – Nhắc thuốc: ${escHtml(reminder.medicineName)} – ${user.fullName}`,
-            html: `<div style="font-family:Arial;padding:20px;max-width:500px">
-              <h3 style="color:#0f766e">💊 Nhắc uống thuốc</h3>
-              <p><strong>Bệnh nhân:</strong> ${escHtml(user.fullName)}</p>
-              <p><strong>Thuốc:</strong> ${escHtml(reminder.medicineName)}</p>
-              <p><strong>Liều:</strong> ${escHtml(reminder.dose || "Theo chỉ định")}</p>
-              <p><strong>Giờ:</strong> ${escHtml(reminder.time)}</p>
-              ${reminder.pillColor ? `<p><strong>Màu viên:</strong> ${escHtml(reminder.pillColor)}</p>` : ""}
-              <p style="color:#999;font-size:11px">HEARTSENSE – Nhắc thuốc tự động</p>
-            </div>`,
-          });
-        }
-        // Mark as sent today
-        reminder.lastReminderDate = vnDateStr;
-      } catch (err) {
-        console.error(`[MedReminder] Loi reminder ${reminder.id}: ${err.message}`);
-      }
-    }
-    // Save updated reminders with lastReminderDate
-    writeJson("reminders", reminders);
-
-  }, 60000);
-  console.log("[Cron] Scheduler khoi dong – kiem tra moi phut (auto-report + medication reminders).");
+// ─── External cron ping endpoint (#Fix-E) ─────────────────────────────────────
+// Dùng cron-job.org hoặc UptimeRobot để ping /api/cron?secret=<CRON_SECRET> mỗi 5–10 phút
+// → giữ server thức + chạy bù báo cáo nếu server vừa ngủ dậy
+async function handleCronPing(urlObject, res) {
+  const secret = urlObject.searchParams.get("secret");
+  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+    sendJson(res, 403, { error: "Forbidden" }); return;
+  }
+  await runSchedulerCheck();
+  sendJson(res, 200, { ok: true, ts: new Date().toISOString() });
 }
 
 // ─── Medication Adherence (#30) ───────────────────────────────────────────────
@@ -2022,6 +2092,7 @@ async function handleRequest(req, res) {
   if (req.method === "POST" && p === "/api/medications/adherence") { await handleMedicationAdherence(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/measurements/delete") { await handleDeleteMeasurement(urlObject, await parseBody(req), res); return; }
   if (req.method === "GET" && p === "/api/population-stats") { handlePopulationStats(res); return; }
+  if (req.method === "GET" && p === "/api/cron") { await handleCronPing(urlObject, res); return; }
 
   if ((req.method === "GET" || req.method === "POST") && p.startsWith("/api/users/") && p.endsWith("/dashboard")) { const b = req.method === "POST" ? await parseBody(req) : {}; await handleDashboard(urlObject, b, res, p.split("/")[3]); return; }
   if (req.method === "GET" && p.startsWith("/api/users/") && p.endsWith("/report")) { await handleReport(urlObject, res, p.split("/")[3]); return; }

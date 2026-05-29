@@ -584,7 +584,8 @@ function analyzePPGSignal(rawSamples, mode, fps) {
 
   const qualityGate = mode === "finger" ? 65 : 65;
   const sampEnBoost = sampEn > 0.9 && cv > 0.20; // #23
-  const poincareBoost = poincareResult.ratio > 0.85; // #24
+  // AFib: SD1 >> SD2 (beat-to-beat chaos dominates long-term trend) → ratio > 1.0
+  const poincareBoost = poincareResult.ratio > 1.0 && poincareResult.sd1 > 30; // #24 fixed
   const afibLikelihood = (
     signalQuality >= qualityGate &&
     rrIntervals.length >= 10 &&
@@ -680,7 +681,9 @@ function analyzeSamples(samples, mode) {
 function sampleEntropy(rrs, m = 2, r = 0.2) {
   if (!rrs || rrs.length < m + 2) return 0;
   const n = rrs.length;
-  const tolerance = r * (rrs.reduce((s, v) => s + v, 0) / n); // r * mean
+  const mean = rrs.reduce((s, v) => s + v, 0) / n;
+  const std = Math.sqrt(rrs.map(v => (v - mean) ** 2).reduce((a, b) => a + b, 0) / n);
+  const tolerance = r * (std || mean * 0.1); // r * std(rr) — chuẩn Richman & Moorman 2000
   function countMatches(len) {
     let c = 0;
     for (let i = 0; i < n - len; i++) {
@@ -1201,18 +1204,27 @@ function startAfibConfirmation(measurement) {
 function renderPillAlert(pillAlert) {
   if (!el.pillAlertBox) return;
   el.pillAlertBox.classList.remove("hidden");
+  const protocols = pillAlert.protocols?.length
+    ? pillAlert.protocols
+    : (pillAlert.medicineName ? [{ medicineName: pillAlert.medicineName, dose: pillAlert.dose, instructions: "" }] : []);
+  const protocolRows = protocols.map(p =>
+    `<div style="background:#fff8e1;border-radius:6px;padding:6px 10px;margin:4px 0">
+      <strong>💊 ${p.medicineName}</strong> — ${p.dose}
+      ${p.instructions ? `<br><span style="font-size:11px;color:#6b7280">${p.instructions}</span>` : ""}
+    </div>`
+  ).join("");
   el.pillAlertBox.innerHTML = `
     <div class="pill-alert-card">
-      <strong>💊 NHẮC UỐNG THUỐC KHẨN CẤP</strong>
-      <p>${pillAlert.message}</p>
+      <strong style="color:var(--danger)">⚠️ Phát hiện AFib! Uống thuốc theo phác đồ bác sĩ:</strong>
+      <div style="margin:8px 0">${protocolRows || `<p>${pillAlert.message}</p>`}</div>
       <div class="button-row">
-        <button id="confirmPillBtn" class="primary-btn" type="button">Đã uống thuốc</button>
+        <button id="confirmPillBtn" class="primary-btn" type="button">✅ Đã uống thuốc</button>
         <button id="dismissPillBtn" class="ghost-btn" type="button">Đóng</button>
       </div>
     </div>`;
   playAlarmTone();
   notify("HEARTSENSE", pillAlert.message);
-  document.querySelector("#confirmPillBtn")?.addEventListener("click", () => { el.pillAlertBox.classList.add("hidden"); });
+  document.querySelector("#confirmPillBtn")?.addEventListener("click", () => { el.pillAlertBox.classList.add("hidden"); showToast("Đã ghi nhận uống thuốc.", "success"); });
   document.querySelector("#dismissPillBtn")?.addEventListener("click", () => el.pillAlertBox.classList.add("hidden"));
 }
 
@@ -1502,9 +1514,14 @@ function renderHistory(measurements = []) {
 }
 
 function renderSymptoms(symptoms = []) {
-  el.symptomList.innerHTML = symptoms.length
-    ? symptoms.map((s) => `<div class="list-item"><span>${formatDateTime(s.createdAt)}</span><strong>${s.note}</strong></div>`).join("")
-    : "<p class='muted'>Chưa có nhật ký triệu chứng.</p>";
+  if (!symptoms.length) { el.symptomList.innerHTML = "<p class='muted'>Chưa có nhật ký triệu chứng.</p>"; return; }
+  el.symptomList.innerHTML = symptoms.map((s) => {
+    const critical = s.isCritical ? `<span class="badge danger" style="font-size:10px;padding:1px 5px;margin-left:4px">⚠️ Nghiêm trọng</span>` : "";
+    return `<div class="list-item" style="${s.isCritical ? 'border-left:3px solid var(--danger)' : ''}">
+      <span style="white-space:nowrap">${formatDateTime(s.createdAt)}</span>
+      <strong style="text-align:right">${s.note}${critical}</strong>
+    </div>`;
+  }).join("");
 }
 
 function renderReminders(reminders = []) {
@@ -1576,11 +1593,24 @@ function renderSosState(events = []) {
   renderSosBox("Hành lang xanh đang được kích hoạt.", active.channels || []);
 }
 
-function renderPillProtocol(protocol) {
+function renderPillProtocol(protocol, protocols) {
   if (!el.pillProtocolStatus) return;
-  el.pillProtocolStatus.textContent = protocol
-    ? `Đang hoạt động: ${protocol.medicineName} ${protocol.dose} – ${protocol.instructions || "Uống ngay khi phát hiện AFib"}`
-    : "Chưa thiết lập phác đồ pill-in-pocket.";
+  const list = protocols?.length ? protocols : (protocol ? [protocol] : []);
+  if (!list.length) { el.pillProtocolStatus.textContent = "Chưa thiết lập phác đồ pill-in-pocket."; return; }
+  el.pillProtocolStatus.innerHTML = list.map(p => `
+    <div class="list-item" style="align-items:flex-start">
+      <div><strong>💊 ${p.medicineName}</strong><br><span style="font-size:12px;color:#6b7280">${p.dose}${p.instructions ? " – " + p.instructions : ""}</span></div>
+      <button class="ghost-btn" style="font-size:11px;padding:2px 8px;color:var(--danger)" onclick="deletePillProtocol('${p.id}')">Xóa</button>
+    </div>`).join("");
+}
+
+async function deletePillProtocol(protocolId) {
+  if (!state.token) return;
+  try {
+    const r = await api("/api/pill-protocol", { method: "POST", body: JSON.stringify({ token: state.token, action: "delete", protocolId }) });
+    renderDashboard(r.dashboard);
+    showToast("Đã xóa phác đồ.", "success");
+  } catch (err) { showToast(err.message, "error"); }
 }
 
 function renderDashboard(dashboard) {
@@ -1603,7 +1633,7 @@ function renderDashboard(dashboard) {
   renderStrokePredictor(dashboard.strokePredictor);
   renderThermalStrain(dashboard.thermalStrain);
   renderAfibDiseaseLog(dashboard.afibDisease);
-  renderPillProtocol(dashboard.pillProtocol);
+  renderPillProtocol(dashboard.pillProtocol, dashboard.pillProtocols);
   renderCha2ds2(dashboard.cha2ds2, dashboard.hasbled); // #22, #34
   renderBpTrend(dashboard.bpTrend);                   // #33
   renderCircadian(dashboard.circadian);               // #28
@@ -1741,11 +1771,20 @@ async function recordBaseline() {
 async function saveSymptom(event) {
   event.preventDefault();
   if (!state.token) { setAuthState("Cần đăng nhập.", "error"); return; }
-  const form = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  const fd = new FormData(form);
+  const checked = Array.from(form.querySelectorAll('input[name="sym"]:checked')).map(cb => cb.value);
+  const note = (fd.get("note") || "").trim();
+  if (!checked.length && !note) { showToast("Chọn ít nhất 1 triệu chứng hoặc thêm ghi chú.", "warn"); return; }
+  const btn = form.querySelector('button[type="submit"]');
+  setLoading(btn, true);
   try {
-    const r = await api("/api/symptoms", { method: "POST", body: JSON.stringify({ token: state.token, note: form.get("note") }) });
-    event.currentTarget.reset(); renderDashboard(r.dashboard);
+    const r = await api("/api/symptoms", { method: "POST", body: JSON.stringify({ token: state.token, symptoms: checked, note }) });
+    form.reset();
+    renderDashboard(r.dashboard);
+    showToast(r.isCritical ? "⚠️ Triệu chứng nghiêm trọng đã ghi nhận. Hãy gặp bác sĩ sớm!" : "Đã lưu nhật ký triệu chứng.", r.isCritical ? "error" : "success", r.isCritical ? 6000 : 3500);
   } catch (err) { setAuthState(err.message, "error"); }
+  finally { setLoading(btn, false, "Lưu nhật ký"); }
 }
 
 async function hydrateMedicineNameFromFile() {
@@ -1997,12 +2036,21 @@ async function savePillProtocol(event) {
   event.preventDefault();
   if (!state.token) { setAuthState("Cần đăng nhập.", "error"); return; }
   const form = new FormData(event.currentTarget);
+  const btn = event.currentTarget.querySelector('button[type="submit"]');
+  setLoading(btn, true);
   try {
-    const r = await api("/api/pill-protocol", { method: "POST", body: JSON.stringify({ token: state.token, medicineName: form.get("medicineName"), dose: form.get("dose"), instructions: form.get("instructions"), active: true }) });
-    renderDashboard(r.dashboard);
-    if (el.pillProtocolStatus) el.pillProtocolStatus.textContent = `Đã lưu: ${r.protocol.medicineName} ${r.protocol.dose}`;
+    const r = await api("/api/pill-protocol", { method: "POST", body: JSON.stringify({
+      token: state.token,
+      medicineName: form.get("medicineName"),
+      dose: form.get("dose"),
+      instructions: form.get("instructions"),
+      active: true,
+    }) });
     event.currentTarget.reset();
-  } catch (err) { setAuthState(err.message, "error"); }
+    renderDashboard(r.dashboard);
+    showToast(`Đã thêm phác đồ: ${r.protocol.medicineName}`, "success");
+  } catch (err) { showToast(err.message, "error"); }
+  finally { setLoading(btn, false, "Thêm phác đồ"); }
 }
 
 // ─── Remote Parent ────────────────────────────────────────────────────────────
