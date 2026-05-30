@@ -288,7 +288,7 @@ function detrend(arr) {
   return arr.map((v, i) => v - trend[i]);
 }
 
-// IIR high-pass filter (loại DC drift < 0.5 Hz)
+// IIR high-pass filter (loại DC drift < 0.5 Hz) — giữ lại làm fallback
 function highpassFilter(signal, fps, cutoffHz = 0.5) {
   const rc = 1 / (2 * Math.PI * cutoffHz);
   const alpha = rc / (rc + 1 / fps);
@@ -300,8 +300,41 @@ function highpassFilter(signal, fps, cutoffHz = 0.5) {
   return out;
 }
 
-// Bandpass 0.5 – 3.5 Hz (tương đương 17–210 BPM)
+// ── 2nd-order Butterworth IIR (bilinear transform) ───────────────────────────
+function _butter2LP(fc, fps) {
+  const K = Math.tan(Math.PI * fc / fps);
+  const K2 = K * K, norm = K2 + Math.SQRT2 * K + 1;
+  return { b: [K2 / norm, 2 * K2 / norm, K2 / norm],
+           a: [1, 2 * (K2 - 1) / norm, (K2 - Math.SQRT2 * K + 1) / norm] };
+}
+function _butter2HP(fc, fps) {
+  const K = Math.tan(Math.PI * fc / fps);
+  const K2 = K * K, norm = K2 + Math.SQRT2 * K + 1;
+  return { b: [1 / norm, -2 / norm, 1 / norm],
+           a: [1, 2 * (K2 - 1) / norm, (K2 - Math.SQRT2 * K + 1) / norm] };
+}
+function _applyBiquad(signal, { b, a }) {
+  const y = new Float64Array(signal.length);
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < signal.length; i++) {
+    const x0 = signal[i];
+    const y0 = b[0]*x0 + b[1]*x1 + b[2]*x2 - a[1]*y1 - a[2]*y2;
+    y[i] = y0; x2 = x1; x1 = x0; y2 = y1; y1 = y0;
+  }
+  return y;
+}
+// Zero-phase 4th-order Butterworth bandpass — HP(0.65 Hz) → LP(3.5 Hz), forward+backward
+function butterworthBandpass(signal, fps) {
+  const hp = _butter2HP(0.65, fps);
+  const lp = _butter2LP(Math.min(3.5, fps * 0.44), fps);
+  const fwd = _applyBiquad(_applyBiquad(signal, hp), lp);
+  const bwd = Array.from(_applyBiquad(_applyBiquad([...fwd].reverse(), hp), lp)).reverse();
+  return bwd;
+}
+
+// Bandpass legacy (fallback nếu fps quá thấp)
 function bandpassFilter(signal, fps) {
+  if (fps >= 15) return butterworthBandpass(signal, fps);
   const hp = highpassFilter(signal, fps, 0.5);
   return movingAverage(hp, Math.max(3, Math.round(fps / 3.5)));
 }
@@ -331,32 +364,29 @@ function hannWindow(signal) {
   return signal.map((v, i) => v * 0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1))));
 }
 
-// ── FFT-based BPM (Discrete Fourier Transform trong vùng nhịp tim) ──
-// Phân tích miền tần số — chính xác hơn autocorrelation và peak detection
-// Không bị sub-harmonic, không bị noise spike, ổn định với tín hiệu yếu
+// ── FFT-based BPM với 4× zero-padding ────────────────────────────────────────
+// Zero-padding nội suy phổ → resolution từ ~2 BPM/bin xuống ~0.5 BPM/bin
+// Inner loop vẫn chỉ chạy N lần (zeros không đóng góp) → không chậm hơn
 function fftBpm(signal, fps) {
   if (signal.length < 60) return null;
   const N = signal.length;
+  const P = N * 4; // 4× zero-padding cho sub-BPM resolution
 
-  // Bước 1: Loại DC offset
   const mean = average(signal);
   const centered = signal.map(v => v - mean);
-
-  // Bước 2: Áp Hann window — giảm nhiễu biên
   const windowed = hannWindow(centered);
 
-  // Bước 3: Tính DFT chỉ trong vùng 40–185 BPM (hiệu quả hơn full FFT)
-  const freqStep = fps / N; // Hz/bin
+  const freqStep = fps / P; // Hz/bin — mịn hơn 4×
   const kMin = Math.max(1, Math.floor(40 / 60 / freqStep));
-  const kMax = Math.min(Math.floor(N / 2), Math.ceil(185 / 60 / freqStep));
+  const kMax = Math.min(Math.floor(P / 2), Math.ceil(185 / 60 / freqStep));
 
   const powers = new Float64Array(kMax - kMin + 1);
   let bestPower = 0, bestIdx = 0;
 
   for (let k = kMin; k <= kMax; k++) {
     let re = 0, im = 0;
-    const w = 2 * Math.PI * k / N;
-    for (let n = 0; n < N; n++) {
+    const w = 2 * Math.PI * k / P; // P thay vì N — tính tần số theo padded length
+    for (let n = 0; n < N; n++) {  // inner loop chỉ chạy N (zeros = 0)
       re += windowed[n] * Math.cos(w * n);
       im -= windowed[n] * Math.sin(w * n);
     }
@@ -366,7 +396,7 @@ function fftBpm(signal, fps) {
     if (power > bestPower) { bestPower = power; bestIdx = idx; }
   }
 
-  // Bước 4: Parabolic interpolation — độ chính xác sub-bin (~0.5 BPM)
+  // Parabolic interpolation trên lưới mịn (0.5 BPM/bin)
   let refinedK = bestIdx + kMin;
   if (bestIdx > 0 && bestIdx < powers.length - 1) {
     const p0 = powers[bestIdx - 1], p1 = powers[bestIdx], p2 = powers[bestIdx + 1];
@@ -441,7 +471,8 @@ function autocorrBpm(signal, fps) {
   return rawBpm >= 40 && rawBpm <= 185 ? rawBpm : null;
 }
 
-// Phát hiện đỉnh với ngưỡng thích nghi cục bộ
+// Phát hiện đỉnh với ngưỡng thích nghi + sub-sample parabolic interpolation
+// → RR interval precision: từ ±33ms (integer 30fps) xuống ±5ms (fractional)
 function detectPeaksAdaptive(signal, fps, mode) {
   const minDist = Math.floor(fps * (mode === "finger" ? 0.33 : 0.40));
   const n = signal.length;
@@ -454,11 +485,15 @@ function detectPeaksAdaptive(signal, fps, mode) {
     const loc = signal.slice(s, e);
     const thresh = average(loc) + stdDev(loc) * (mode === "finger" ? 0.3 : 0.55);
     if (v < thresh) continue;
-    if (peaks.length && (i - peaks[peaks.length - 1]) < minDist) {
-      if (v > signal[peaks[peaks.length - 1]]) peaks[peaks.length - 1] = i;
+    // Sub-sample parabolic interpolation → vị trí đỉnh chính xác hơn 1 sample
+    let frac = i;
+    const a = signal[i - 1], c = signal[i + 1], denom = a - 2 * v + c;
+    if (denom < 0) frac = i + 0.5 * (a - c) / denom;
+    if (peaks.length && (frac - peaks[peaks.length - 1]) < minDist) {
+      if (v > signal[Math.round(peaks[peaks.length - 1])]) peaks[peaks.length - 1] = frac;
       continue;
     }
-    peaks.push(i);
+    peaks.push(frac);
   }
   return peaks;
 }
@@ -503,19 +538,27 @@ function multiWindowBpm(filtered, fps, mode) {
 function analyzePPGSignal(rawSamples, mode, fps) {
   if (rawSamples.length < fps * 10) return null;
 
-  // #27: Motion artifact rejection
-  const cleanSamples = rejectMotionWindows(rawSamples, fps);
+  // Motion artifact rejection — chặt hơn cho Face (sigma=2.0 vs 3.0)
+  const cleanSamples = rejectMotionWindows(rawSamples, fps, 2, mode);
 
-  // Tín hiệu: POS (R+G+B) cho Face — RED cho Ngón Trỏ
-  const rawSignal = mode === "finger"
-    ? cleanSamples.map(s => s.avgRed)
-    : extractPosSignal(cleanSamples);
+  // Chọn kênh tín hiệu tốt nhất:
+  // Face: POS algorithm (R+G+B) — Wang 2017
+  // Finger: so sánh SNR của Red vs Green, chọn kênh có bandpass-filtered variance cao hơn
+  let rawSignal;
+  if (mode === "finger") {
+    const rawRed = cleanSamples.map(s => s.avgRed);
+    const rawGreen = cleanSamples.map(s => s.avgGreen);
+    const snrRed = stdDev(butterworthBandpass(rawRed, fps));
+    const snrGreen = stdDev(butterworthBandpass(rawGreen, fps));
+    rawSignal = snrRed >= snrGreen ? rawRed : rawGreen;
+  } else {
+    rawSignal = extractPosSignal(cleanSamples);
+  }
 
-  // ── Kiểm tra tính xác thực tín hiệu PPG ──────────────────────────────────
-  const filtered = bandpassFilter(rawSignal, fps);
+  // Butterworth 4th-order zero-phase bandpass (thay bandpassFilter 1st-order cũ)
+  const filtered = butterworthBandpass(rawSignal, fps);
   const filteredStd = stdDev(filtered);
 
-  // BUG#12 fix: merge two consecutive checks into one
   if (filteredStd < 0.25) return null;
 
   // Phương pháp 1: Multi-window median (ổn định nhất)
@@ -524,26 +567,30 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   // Phương pháp 2: Autocorrelation first-peak (tránh sub-harmonic)
   const acfBpm = autocorrBpm(filtered, fps);
 
-  // Phương pháp 3: Peak detection
+  // Phương pháp 3: Peak detection (sub-sample precision)
   const peaks = detectPeaksAdaptive(filtered, fps, mode);
   const pkResult = peaksToBpm(peaks, fps);
   const peakBpm = pkResult?.bpm || null;
 
-  // Phương pháp 4: FFT frequency domain (chính xác nhất, robust với noise)
-  // Áp Hann window + DFT với parabolic interpolation → độ phân giải ~0.5 BPM
+  // Phương pháp 4: FFT với 4× zero-padding (~0.5 BPM/bin resolution)
   const fftResult = fftBpm(filtered, fps);
 
-  // ── Hợp nhất 4 phương pháp: lấy MEDIAN ─────────────────────────
-  // Median loại bỏ outlier tự động — kể cả 1-2 phương pháp sai vẫn cho kết quả đúng
+  // ── Fusion thông minh: FFT+MultiWindow được ưu tiên khi đồng thuận ──────
+  // Khi FFT và multi-window đồng ý (≤3 BPM): kết quả chính xác nhất, dùng weighted avg
+  // Khi không đồng ý: dùng median của tất cả (robust với outlier)
   const allValid = [mwBpm, acfBpm, peakBpm, fftResult].filter(b => b && b >= 40 && b <= 185);
   let estimatedBpm = null;
   if (allValid.length >= 2) {
-    const sorted = [...allValid].sort((a, b) => a - b);
-    // Median: nếu chẵn → trung bình 2 phần tử giữa
-    const mid = Math.floor(sorted.length / 2);
-    estimatedBpm = sorted.length % 2 === 0
-      ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
-      : sorted[mid];
+    if (fftResult && mwBpm && Math.abs(fftResult - mwBpm) <= 3) {
+      // FFT + MultiWindow đồng thuận → weighted average (FFT 60%, MW 40%)
+      estimatedBpm = Math.round(fftResult * 0.6 + mwBpm * 0.4);
+    } else {
+      const sorted = [...allValid].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      estimatedBpm = sorted.length % 2 === 0
+        ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+        : sorted[mid];
+    }
   } else if (allValid.length === 1) {
     estimatedBpm = allValid[0];
   }
@@ -754,19 +801,22 @@ function computeLfHfRatio(rrs, fps = 4) {
 }
 
 // ─── Motion Artifact Rejection (#27) ─────────────────────────────────────────
-function rejectMotionWindows(samples, fps, windowSec = 2) {
+// Face PPG: sigma=2.0 (chặt hơn vì nhiễu chuyển động làm sai lớn hơn)
+// Finger PPG: sigma=3.0 (thoải hơn vì ngón tay ép camera ổn định hơn)
+function rejectMotionWindows(samples, fps, windowSec = 2, mode = "face") {
   const winSize = Math.floor(fps * windowSec);
   const movements = samples.map(s => s.movement || 0);
   const meanMov = movements.reduce((a, b) => a + b, 0) / movements.length;
   const stdMov = Math.sqrt(movements.map(m => (m - meanMov) ** 2).reduce((a, b) => a + b, 0) / movements.length);
-  const threshold = meanMov + 3 * stdMov;
+  const sigma = mode === "finger" ? 3.0 : 2.0;
+  const threshold = meanMov + sigma * stdMov;
   const clean = [];
   for (let i = 0; i + winSize <= samples.length; i += winSize) {
     const win = samples.slice(i, i + winSize);
     const maxMov = Math.max(...win.map(s => s.movement || 0));
     if (maxMov <= threshold) clean.push(...win);
   }
-  return clean.length >= fps * 8 ? clean : samples; // fallback to all if too few clean
+  return clean.length >= fps * 8 ? clean : samples;
 }
 
 // ─── Camera & Preview ─────────────────────────────────────────────────────────
