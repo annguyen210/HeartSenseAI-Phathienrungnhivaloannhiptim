@@ -540,23 +540,49 @@ function getWeatherDescription(code) {
 const _weatherCache = { data: null, fetchedAt: 0, query: "" };
 const WEATHER_CACHE_TTL = 30 * 60 * 1000; // 30 phút
 
+// query: string "CityName,VN" HOẶC object {lat, lon} từ GPS người dùng
 async function fetchOpenMeteoWeather(query) {
   const now = Date.now();
-  if (_weatherCache.data && _weatherCache.query === query && now - _weatherCache.fetchedAt < WEATHER_CACHE_TTL) {
+  const isCoords = query && typeof query === "object" && query.lat != null && query.lon != null;
+  const cacheKey = isCoords
+    ? `${Number(query.lat).toFixed(3)},${Number(query.lon).toFixed(3)}`
+    : String(query);
+
+  if (_weatherCache.data && _weatherCache.query === cacheKey && now - _weatherCache.fetchedAt < WEATHER_CACHE_TTL) {
     return _weatherCache.data;
   }
-  const cityName = query.split(",")[0].trim();
-  const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=vi&format=json`;
-  const geoData = await requestJson(geoUrl);
-  if (!geoData?.results?.length) return null;
-  const { latitude, longitude, name, country } = geoData.results[0];
+
+  let latitude, longitude, locationName;
+
+  if (isCoords) {
+    // GPS coordinates → gọi thẳng Open-Meteo, không cần geocoding
+    latitude = Number(query.lat);
+    longitude = Number(query.lon);
+    locationName = null; // lấy từ timezone trong response
+  } else {
+    const cityName = String(query).split(",")[0].trim();
+    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=vi&format=json`;
+    const geoData = await requestJson(geoUrl);
+    if (!geoData?.results?.length) return null;
+    const r = geoData.results[0];
+    latitude = r.latitude; longitude = r.longitude;
+    locationName = `${r.name}, ${r.country}`;
+  }
+
   const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto`;
   const weatherData = await requestJson(weatherUrl);
   if (!weatherData?.current) return null;
-  const result = { name: `${name}, ${country}`, temp: weatherData.current.temperature_2m, weatherCode: weatherData.current.weather_code };
+
+  if (!locationName && weatherData.timezone) {
+    // "Asia/Ho_Chi_Minh" → "Ho Chi Minh"
+    locationName = weatherData.timezone.split("/").pop().replace(/_/g, " ");
+  }
+  locationName = locationName || cacheKey;
+
+  const result = { name: locationName, temp: weatherData.current.temperature_2m, weatherCode: weatherData.current.weather_code };
   _weatherCache.data = result;
   _weatherCache.fetchedAt = now;
-  _weatherCache.query = query;
+  _weatherCache.query = cacheKey;
   return result;
 }
 
@@ -576,8 +602,9 @@ function pseudoWeather(user) {
   };
 }
 
-async function getWeatherAlert(user) {
-  const locationQuery = WEATHER_DEFAULT_QUERY;
+// coordsOverride: {lat, lon} từ GPS người dùng; null → dùng WEATHER_DEFAULT_QUERY
+async function getWeatherAlert(user, coordsOverride) {
+  const locationQuery = coordsOverride || WEATHER_DEFAULT_QUERY;
   try {
     const weather = await fetchOpenMeteoWeather(locationQuery);
     if (!weather) return pseudoWeather(user);
@@ -594,7 +621,7 @@ async function getWeatherAlert(user) {
         : `Thời tiết ${weather.name}: ${desc}, ${currentTemp}°C.`,
     };
   } catch {
-    return { ...pseudoWeather(user), source: "fallback", location: locationQuery };
+    return { ...pseudoWeather(user), source: "fallback", location: WEATHER_DEFAULT_QUERY };
   }
 }
 
@@ -1068,7 +1095,8 @@ function buildBpTrend(userId, allMeasurements) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-async function buildDashboard(userId) {
+// opts.coords = {lat, lon} từ GPS người dùng (tùy chọn)
+async function buildDashboard(userId, opts = {}) {
   const users = readJson("users");
   const user = users.find((u) => u.id === userId);
   if (!user) return null;
@@ -1087,7 +1115,7 @@ async function buildDashboard(userId) {
   const afibBurden30d = calculateAfibBurden(userId, 30);
   const strokePredictor = predictStroke72h(user, measurements);
   const afibDisease = buildAfibDiseaseSummary(userId);
-  const weatherAlert = await getWeatherAlert(user);
+  const weatherAlert = await getWeatherAlert(user, opts.coords || null);
 
   const baselineBpm = user.baseline?.restingBpm || 72;
   const latestBpm = latestMeasurement?.result?.bpm || baselineBpm;
@@ -1766,7 +1794,11 @@ async function handleCancelSos(urlObject, body, res) {
 async function handleDashboard(urlObject, body, res, userId) {
   const session = getSessionFromRequest(urlObject, body);
   if (!session || session.userId !== userId) { sendJson(res, 401, { error: "Khong du quyen." }); return; }
-  const dashboard = await buildDashboard(userId);
+  // Nhận tọa độ GPS từ frontend (nếu người dùng đã cấp quyền vị trí)
+  const lat = parseFloat(body.lat);
+  const lon = parseFloat(body.lon);
+  const coords = (!isNaN(lat) && !isNaN(lon)) ? { lat, lon } : null;
+  const dashboard = await buildDashboard(userId, { coords });
   if (!dashboard) { sendJson(res, 404, { error: "Khong tim thay nguoi dung." }); return; }
   sendJson(res, 200, dashboard);
 }

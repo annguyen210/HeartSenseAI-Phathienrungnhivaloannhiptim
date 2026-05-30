@@ -17,6 +17,7 @@ const state = {
   torchOn: false, sosSending: false,
   isOnline: navigator.onLine,
   lowQualityStart: null, // for #10 signal quality warning
+  userLocation: null, // GPS {lat, lon} — set sau khi user cấp quyền vị trí
 };
 
 // ─── Element refs ─────────────────────────────────────────────────────────────
@@ -1614,8 +1615,11 @@ function renderWeeklyReport(report = {}) {
 }
 
 function renderWeather(weather = {}) {
+  const locLabel = weather.location
+    ? `<span style="font-size:11px;color:#6b7280;margin-left:4px">(${weather.location})</span>`
+    : "";
   el.weatherBox.innerHTML = `
-    <div class="list-item"><span>Nhiệt độ</span><strong>${weather.currentTemp ?? "--"}°C</strong></div>
+    <div class="list-item"><span>Nhiệt độ ${locLabel}</span><strong>${weather.currentTemp ?? "--"}°C</strong></div>
     <div class="list-item"><span>Trạng thái</span><strong>${weather.level === "warn" ? "⚠️ Cảnh báo nhiệt" : "✅ Ổn định"}</strong></div>
     <p class="muted">${weather.text || "Chưa có dữ liệu thời tiết."}</p>`;
 }
@@ -1709,11 +1713,32 @@ function renderDashboard(dashboard) {
   }
 }
 
+// Lấy GPS vị trí người dùng (nhanh nếu browser đã cache; timeout 5s)
+function getUserLocation() {
+  if (!navigator.geolocation) return Promise.resolve(null);
+  return new Promise(resolve => {
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: 5000, maximumAge: 5 * 60 * 1000 } // cache 5 phút
+    );
+  });
+}
+
 async function loadDashboard(showError = false) {
   if (!state.user || !state.token) return;
+  // Lấy vị trí GPS (instant nếu đã cache; không block nếu chưa cấp quyền)
+  if (!state.userLocation) {
+    state.userLocation = await Promise.race([
+      getUserLocation(),
+      new Promise(r => setTimeout(() => r(null), 5000)),
+    ]);
+  }
   try {
+    const body = { token: state.token };
+    if (state.userLocation) { body.lat = state.userLocation.lat; body.lon = state.userLocation.lon; }
     const d = await api(`/api/users/${state.user.id}/dashboard`, {
-      method: "POST", body: JSON.stringify({ token: state.token })
+      method: "POST", body: JSON.stringify(body)
     });
     renderDashboard(d);
   } catch (err) {
