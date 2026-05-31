@@ -340,6 +340,58 @@ function bandpassFilter(signal, fps) {
   return movingAverage(hp, Math.max(3, Math.round(fps / 3.5)));
 }
 
+// CHROM (Chrominance-based rPPG) — de Haan & Jeanne 2013
+// Outperforms POS in varying/non-stationary lighting (office flicker, sunlight)
+// Used as Face PPG alternative: pick whichever has higher post-filter SNR
+function extractChromSignal(samples) {
+  if (samples.length < 10) return null;
+  const meanR = average(samples.map(s => s.avgRed));
+  const meanG = average(samples.map(s => s.avgGreen));
+  const meanB = average(samples.map(s => s.avgBlue));
+  if (!meanR || !meanG || !meanB) return null;
+  const Cr = samples.map(s => s.avgRed / meanR - 1);
+  const Cg = samples.map(s => s.avgGreen / meanG - 1);
+  const Cb = samples.map(s => s.avgBlue / meanB - 1);
+  // Xs = 3Cr - 2Cg,  Ys = 1.5Cr + Cg - 1.5Cb
+  const Xs = Cr.map((r, i) => 3 * r - 2 * Cg[i]);
+  const Ys = Cr.map((r, i) => 1.5 * r + Cg[i] - 1.5 * Cb[i]);
+  const stdXs = stdDev(Xs), stdYs = stdDev(Ys);
+  if (!stdXs || !stdYs) return null;
+  const alpha = stdXs / stdYs;
+  return Xs.map((x, i) => x - alpha * Ys[i]);
+}
+
+// Hampel filter: loại outlier trong chuỗi RR intervals dựa trên Median Absolute Deviation
+// Robust hơn IQR khi chuỗi ngắn (<30 điểm) — thay thế nhịp outlier bằng median cục bộ
+// Sau đó tính lại HRV trên dữ liệu sạch → tăng độ chính xác SDNN/RMSSD/CV
+function hampelFilter(rrs, halfWin = 3, sigmaThresh = 3.0) {
+  if (rrs.length < 2 * halfWin + 1) return [...rrs];
+  const out = [...rrs];
+  for (let i = 0; i < rrs.length; i++) {
+    const lo = Math.max(0, i - halfWin);
+    const hi = Math.min(rrs.length, i + halfWin + 1);
+    const win = rrs.slice(lo, hi).sort((a, b) => a - b);
+    const med = win[Math.floor(win.length / 2)];
+    const mad = 1.4826 * average(win.map(r => Math.abs(r - med)));
+    if (mad > 0 && Math.abs(rrs[i] - med) > sigmaThresh * mad) out[i] = med;
+  }
+  return out;
+}
+
+// Turning Point Ratio (TPR) — đo tỉ lệ "đổi chiều" trong chuỗi RR
+// Normal sinus rhythm: TPR ≈ 0.50–0.62 (có nhịp điệu, ít đổi chiều)
+// AFib: TPR > 0.66 (loạn hoàn toàn, đổi chiều liên tục)
+// Nguồn: Tateno & Glass (2001), Annals of Biomedical Engineering
+function computeTPR(rrs) {
+  if (rrs.length < 5) return 0;
+  let turns = 0;
+  for (let i = 1; i < rrs.length - 1; i++) {
+    if ((rrs[i] > rrs[i - 1] && rrs[i] > rrs[i + 1]) ||
+        (rrs[i] < rrs[i - 1] && rrs[i] < rrs[i + 1])) turns++;
+  }
+  return rrs.length > 2 ? turns / (rrs.length - 2) : 0;
+}
+
 // POS (Plane Orthogonal to Skin) — Wang 2017 — dùng cả 3 kênh R/G/B
 // Cho Face rPPG chính xác hơn hẳn so với chỉ dùng Green channel
 function extractPosSignal(samples) {
@@ -542,9 +594,10 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   // Motion artifact rejection — chặt hơn cho Face (sigma=2.0 vs 3.0)
   const cleanSamples = rejectMotionWindows(rawSamples, fps, 2, mode);
 
-  // Chọn kênh tín hiệu tốt nhất:
-  // Face: POS algorithm (R+G+B) — Wang 2017
-  // Finger: so sánh SNR của Red vs Green, chọn kênh có bandpass-filtered variance cao hơn
+  // Chọn kênh tín hiệu tốt nhất — cải tiến v2:
+  // Finger: Red vs Green → chọn SNR cao hơn (không đổi)
+  // Face: POS vs CHROM → test cả 2 thuật toán, chọn cái có bandpass SNR cao hơn
+  //       CHROM thường tốt hơn POS khi ánh sáng phòng không ổn định (đèn huỳnh quang, nắng qua cửa)
   let rawSignal;
   if (mode === "finger") {
     const rawRed = cleanSamples.map(s => s.avgRed);
@@ -553,7 +606,16 @@ function analyzePPGSignal(rawSamples, mode, fps) {
     const snrGreen = stdDev(butterworthBandpass(rawGreen, fps));
     rawSignal = snrRed >= snrGreen ? rawRed : rawGreen;
   } else {
-    rawSignal = extractPosSignal(cleanSamples);
+    const posSignal = extractPosSignal(cleanSamples);
+    const chromSignal = extractChromSignal(cleanSamples);
+    if (chromSignal) {
+      const snrPos = stdDev(butterworthBandpass(posSignal, fps));
+      const snrChrom = stdDev(butterworthBandpass(chromSignal, fps));
+      // Chọn CHROM chỉ khi vượt trội rõ ràng (>8%) — tránh switching noise
+      rawSignal = snrChrom > snrPos * 1.08 ? chromSignal : posSignal;
+    } else {
+      rawSignal = posSignal;
+    }
   }
 
   // Butterworth 4th-order zero-phase bandpass (thay bandpassFilter 1st-order cũ)
@@ -599,52 +661,101 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   if (!estimatedBpm) return null;
   const bpm = Math.round(Math.min(mode === "finger" ? 185 : 170, Math.max(mode === "finger" ? 40 : 42, estimatedBpm)));
 
-  // RR intervals từ peak detection
-  const rrIntervals = pkResult?.rrs || [];
+  // ── RR intervals: lấy từ peak detection rồi lọc Hampel ──────────────────────
+  // Hampel filter loại bỏ RR outlier (nhịp sớm đơn lẻ, artifact) trước khi tính HRV
+  // → SDNN/RMSSD/CV chính xác hơn đáng kể, đặc biệt với Face PPG webcam
+  const rrRaw = pkResult?.rrs || [];
+  const rrIntervals = rrRaw.length >= 6 ? hampelFilter(rrRaw, 3, 3.0) : rrRaw;
+
   const sdnn = rrIntervals.length >= 3 ? Math.round(stdDev(rrIntervals)) : 0;
   const diffs = rrIntervals.slice(1).map((r, i) => Math.abs(r - rrIntervals[i]));
   const rmssd = diffs.length ? Math.round(Math.sqrt(average(diffs.map(d => d * d)))) : 0;
   const pnn50 = diffs.length >= 3 ? Math.round(diffs.filter(d => d > 50).length / diffs.length * 100) : 0;
   const cv = rrIntervals.length >= 4 ? stdDev(rrIntervals) / average(rrIntervals) : 0;
 
-  // Signal quality (use cleanSamples for better accuracy)
+  // ── Signal quality — cải tiến: thêm thành phần SNR phổ tần ─────────────────
   const lightScores = cleanSamples.map(s => Math.max(18, Math.min(99, 100 - Math.abs(s.brightness - 122) * 0.9)));
   const movementScores = cleanSamples.map(s => Math.max(12, Math.min(99, 100 - s.movement * 1.8)));
   const lightScore = Math.round(average(lightScores));
   const stabilityScore = Math.round(average(movementScores));
-  // Số phương pháp đồng thuận → tăng signal quality
   const allClose = allValid.filter(b => Math.abs(b - (estimatedBpm || 0)) <= 5).length;
   const methodAgreement = allClose >= 3 ? 16 : allClose >= 2 ? 10 : 0;
   const expectedPeaks = rawSamples.length / fps * (bpm / 60);
-  const signalQuality = Math.round(Math.min(92, Math.max(20,
-    (peaks.length / Math.max(1, expectedPeaks)) * 52 +
-    lightScore * 0.14 + stabilityScore * 0.14 +
-    methodAgreement + (mode === "finger" ? 12 : 0)
+  // SNR phổ: tỉ lệ năng lượng tín hiệu trong dải tim / tổng năng lượng sau filter
+  const rawStd = stdDev(rawSignal);
+  const spectralSnrBonus = rawStd > 0 ? Math.round(Math.min(12, (filteredStd / rawStd) * 18)) : 0;
+  const signalQuality = Math.round(Math.min(95, Math.max(20,
+    (peaks.length / Math.max(1, expectedPeaks)) * 46 +
+    lightScore * 0.13 + stabilityScore * 0.13 +
+    methodAgreement + spectralSnrBonus +
+    (mode === "finger" ? 10 : 0) +
+    (rrIntervals.length >= 20 ? 4 : 0)
   )));
 
-  // ═══ AFib detection — 6 điều kiện, cân bằng sensitivity / specificity ═══════
-  // #23: SampEn boost
-  const sampEn = rrIntervals.length >= 12 ? sampleEntropy(rrIntervals, 2, 0.2) : 0;
-  // #24: Poincaré
-  const poincareResult = poincarePlot(rrIntervals);
-  // #26: LF/HF
-  const lfhf = computeLfHfRatio(rrIntervals);
+  // ═══ AFib detection v2 — Evidence-Based Scoring (0–100) ══════════════════════
+  // Thay thế 6 ngưỡng cứng → tích lũy bằng chứng từ 7 nguồn độc lập
+  // Ngưỡng kết luận: score >= 52 → AFib, cho phép nhận biết AFib nhẹ mà ngưỡng cứng bỏ sót
+  // Nguồn: Tateno & Glass 2001, Huang et al. 2011, Tison et al. 2018
 
-  const qualityGate = mode === "finger" ? 65 : 65;
-  const sampEnBoost = sampEn > 0.9 && cv > 0.20; // #23
-  // AFib: SD1 >> SD2 (beat-to-beat chaos dominates long-term trend) → ratio > 1.0
-  const poincareBoost = poincareResult.ratio > 1.0 && poincareResult.sd1 > 30; // #24 fixed
+  const sampEn = rrIntervals.length >= 12 ? sampleEntropy(rrIntervals, 2, 0.2) : 0;
+  const poincareResult = poincarePlot(rrIntervals);
+  const lfhf = computeLfHfRatio(rrIntervals);
+  const tpr = computeTPR(rrIntervals); // Turning Point Ratio
+  const rmssdSdnnRatio = sdnn > 0 ? rmssd / sdnn : 0; // AFib: RMSSD >> SDNN
+
+  // Ngưỡng CV thích ứng: tín hiệu chất lượng cao → hạ ngưỡng để bắt AFib nhẹ hơn
+  const cvThreshold = signalQuality >= 82 ? 0.17 : signalQuality >= 72 ? 0.20 : 0.23;
+
+  let afibEvidence = 0;
+
+  // 1. Biến thiên RR (CV) — chỉ số quan trọng nhất (trọng số 35)
+  if (cv > 0.30) afibEvidence += 35;
+  else if (cv > cvThreshold) afibEvidence += 25;
+  else if (cv > 0.13) afibEvidence += 8;
+
+  // 2. pNN50 — % nhịp kế tiếp chênh lệch > 50ms (trọng số 18)
+  if (pnn50 > 45) afibEvidence += 18;
+  else if (pnn50 > 28) afibEvidence += 10;
+  else if (pnn50 > 18) afibEvidence += 4;
+
+  // 3. SDNN — độ lệch chuẩn tổng thể (trọng số 12)
+  if (sdnn > 65) afibEvidence += 12;
+  else if (sdnn > 42) afibEvidence += 7;
+
+  // 4. Sample Entropy — đo độ hỗn loạn phi tuyến (trọng số 12)
+  if (sampEn > 1.1) afibEvidence += 12;
+  else if (sampEn > 0.85) afibEvidence += 7;
+
+  // 5. Turning Point Ratio — AFib > 0.66 (trọng số 10)
+  if (tpr > 0.72) afibEvidence += 10;
+  else if (tpr > 0.64) afibEvidence += 5;
+
+  // 6. Poincaré SD1/SD2 — beat-to-beat chaos > long-term (trọng số 8)
+  const poincareBoost = poincareResult.ratio > 1.0 && poincareResult.sd1 > 28;
+  if (poincareBoost) afibEvidence += 8;
+  else if (poincareResult.ratio > 0.85) afibEvidence += 3;
+
+  // 7. RMSSD/SDNN ratio — AFib: RMSSD lớn bất thường so với SDNN (trọng số 8)
+  if (rmssdSdnnRatio > 1.5) afibEvidence += 8;
+  else if (rmssdSdnnRatio > 1.15) afibEvidence += 4;
+
+  // Bonus chất lượng: nhiều RR + tín hiệu tốt → tin hơn
+  if (rrIntervals.length >= 22 && signalQuality >= 78) afibEvidence += 5;
+  else if (rrIntervals.length >= 16) afibEvidence += 2;
+
+  const qualityGate = 62; // thống nhất cho cả finger và face
+  const sampEnBoost = sampEn > 0.9 && cv > 0.20;
+
+  // Kết luận AFib: đủ bằng chứng (score ≥ 52) VÀ đủ chất lượng VÀ đủ dữ liệu
   const afibLikelihood = (
     signalQuality >= qualityGate &&
-    rrIntervals.length >= 10 &&
-    bpm >= 50 && bpm <= 150 &&
-    cv > 0.22 &&
-    pnn50 > 30 &&
-    sdnn > 45
-  ) || (sampEnBoost && cv > 0.20 && rrIntervals.length >= 10); // #23 SampEn path
+    rrIntervals.length >= 14 &&   // tăng từ 10 → 14: cần đủ dữ liệu trước khi kết luận
+    bpm >= 45 && bpm <= 155 &&
+    afibEvidence >= 52
+  );
 
-  const afibScore = Math.round(Math.min(85, cv * 240 + (pnn50 > 40 ? 14 : 0) + (sdnn > 80 ? 8 : 0)
-    + (sampEnBoost ? 8 : 0) + (poincareBoost ? 5 : 0)));
+  // afibScore cho UI (0-100, dùng hiển thị thanh nguy cơ)
+  const afibScore = Math.round(Math.min(95, afibEvidence * 0.95));
 
   const hrvScore = Math.round(Math.min(94, Math.max(14,
     (Math.min(sdnn || 28, 90) / 90 * 55) + (Math.min(rmssd || 18, 65) / 65 * 45)
@@ -658,17 +769,20 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   return {
     estimatedBpm: bpm, bpm, sdnn, rmssd, pnn50,
     cv: Math.round(cv * 1000) / 1000,
-    sampEn, // #23
-    sd1: poincareResult.sd1, sd2: poincareResult.sd2, // #24
-    lfhfRatio: lfhf?.ratio || null, // #26
+    sampEn,
+    sd1: poincareResult.sd1, sd2: poincareResult.sd2,
+    lfhfRatio: lfhf?.ratio || null,
+    tpr: Math.round(tpr * 1000) / 1000,         // Turning Point Ratio (mới)
+    rmssdSdnnRatio: Math.round(rmssdSdnnRatio * 100) / 100, // (mới)
+    afibEvidence,                                // điểm bằng chứng 0-100 (mới)
     hrvScore, afibLikelihood, irregularityIndex: afibScore,
     signalQuality, lightScore, stabilityScore,
-    peakCount: peaks.length, peakPositions: peaks.slice(0, 50), // #31 for waveform annotations
+    peakCount: peaks.length, peakPositions: peaks.slice(0, 50),
     rrIntervals: rrIntervals.slice(0, 30),
     waveform: normalizeWave(detrend(rawSignal).slice(-90)),
     systolic: Number(el.systolicInput.value || 128),
     contextNote: el.measurementContextInput.value.trim(),
-    contextUnchecked, // #29
+    contextUnchecked,
   };
 }
 
@@ -2514,13 +2628,20 @@ function renderAfibDiseaseLog(afibDisease) {
 function renderHrvAdvanced(result) {
   if (!el.hrvAdvancedBox || !result) return;
   const hasPpg = result.sdnn > 0;
-  el.hrvAdvancedBox.innerHTML = hasPpg ? `
+  if (!hasPpg) { el.hrvAdvancedBox.innerHTML = "<p class='muted'>Chưa đủ dữ liệu PPG để tính SDNN/RMSSD. Đo thêm để nâng cao độ chính xác.</p>"; return; }
+  const cvColor = result.cv > 0.22 ? "#ef4444" : result.cv > 0.17 ? "#f59e0b" : "#22c55e";
+  const tprColor = result.tpr > 0.66 ? "#ef4444" : result.tpr > 0.58 ? "#f59e0b" : "#22c55e";
+  const ratioColor = result.rmssdSdnnRatio > 1.3 ? "#ef4444" : result.rmssdSdnnRatio > 1.0 ? "#f59e0b" : "#22c55e";
+  const evidColor = (result.afibEvidence || 0) >= 52 ? "#ef4444" : (result.afibEvidence || 0) >= 35 ? "#f59e0b" : "#22c55e";
+  el.hrvAdvancedBox.innerHTML = `
     <div class="list-item"><span>SDNN</span><strong>${result.sdnn} ms</strong></div>
     <div class="list-item"><span>RMSSD</span><strong>${result.rmssd} ms</strong></div>
     <div class="list-item"><span>pNN50</span><strong>${result.pnn50}%</strong></div>
-    <div class="list-item"><span>CV (AFib index)</span><strong>${result.cv} ${result.cv > 0.18 ? "⚠️" : "✓"}</strong></div>
-    <div class="list-item"><span>Số đỉnh PPG</span><strong>${result.rrIntervals?.length || "--"} khoảng RR</strong></div>` :
-    "<p class='muted'>Chưa đủ dữ liệu PPG để tính SDNN/RMSSD. Đo thêm để nâng cao độ chính xác.</p>";
+    <div class="list-item"><span>CV (biến thiên RR)</span><strong style="color:${cvColor}">${result.cv} ${result.cv > 0.17 ? "⚠️" : "✓"}</strong></div>
+    <div class="list-item"><span>TPR (Turning Point)</span><strong style="color:${tprColor}">${result.tpr ?? "--"} ${(result.tpr||0) > 0.66 ? "⚠️ Loạn nhịp" : "✓"}</strong></div>
+    <div class="list-item"><span>RMSSD/SDNN ratio</span><strong style="color:${ratioColor}">${result.rmssdSdnnRatio ?? "--"} ${(result.rmssdSdnnRatio||0) > 1.3 ? "⚠️" : "✓"}</strong></div>
+    <div class="list-item"><span>AFib Evidence Score</span><strong style="color:${evidColor}">${result.afibEvidence ?? "--"}/100 ${(result.afibEvidence||0)>=52?"🚨 Nghi ngờ AFib":(result.afibEvidence||0)>=35?"⚠️ Theo dõi":"✓ Bình thường"}</strong></div>
+    <div class="list-item"><span>Số khoảng RR (Hampel)</span><strong>${result.rrIntervals?.length || "--"} nhịp</strong></div>`;
 }
 
 // ─── CHA2DS2-VASc + HASBLED display (#22, #34) ───────────────────────────────
