@@ -703,56 +703,91 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   const tpr = computeTPR(rrIntervals); // Turning Point Ratio
   const rmssdSdnnRatio = sdnn > 0 ? rmssd / sdnn : 0; // AFib: RMSSD >> SDNN
 
-  // Ngưỡng CV thích ứng: tín hiệu chất lượng cao → hạ ngưỡng để bắt AFib nhẹ hơn
+  // ── Bộ lọc sinh lý học (Physiological Plausibility Gates) ──────────────────
+  // Noise từ che camera không đúng cách tạo ra CV/SDNN/pNN50 cực cao (>giới hạn sinh lý)
+  // → lọc out trước khi tính điểm AFib để tránh false positive hoàn toàn
+
+  // Số phương pháp BPM đồng thuận trong 8 BPM → noise thường làm các phương pháp bất đồng
+  const methodsAgreeing = allValid.filter(b => Math.abs(b - bpm) <= 8).length;
+
+  // FFT phải tìm được tần số tim rõ ràng — noise không có peak quang phổ rõ
+  const hasCardiacFrequency = fftResult !== null;
+
+  // Giới hạn sinh lý của AFib thật (từ nghiên cứu lâm sàng):
+  // CV: 0.10–0.50 (noise từ 3 camera: thường 0.5–0.9 → loại bỏ)
+  // SDNN: 15–180ms (noise: thường >200ms)
+  // RMSSD: 10–200ms
+  const cvPhysio = cv >= 0.10 && cv <= 0.52;
+  const sdnnPhysio = sdnn >= 15 && sdnn <= 185;
+  const rmssdPhysio = rmssd >= 8 && rmssd <= 210;
+  const bpmPhysio = bpm >= 45 && bpm <= 160;
+
+  // Tất cả bộ lọc sinh lý phải pass → nếu không = nhiễu/đặt tay sai
+  const physiologicalGate = cvPhysio && sdnnPhysio && rmssdPhysio && bpmPhysio
+    && hasCardiacFrequency && methodsAgreeing >= 2 && allValid.length >= 2;
+
+  // Ngưỡng CV thích ứng (chỉ áp dụng khi đã qua physiologicalGate)
+  const cvCapped = Math.min(cv, 0.52); // cap CV để noise cực cao không score cao hơn AFib thật
   const cvThreshold = signalQuality >= 82 ? 0.17 : signalQuality >= 72 ? 0.20 : 0.23;
 
   let afibEvidence = 0;
 
-  // 1. Biến thiên RR (CV) — chỉ số quan trọng nhất (trọng số 35)
-  if (cv > 0.30) afibEvidence += 35;
-  else if (cv > cvThreshold) afibEvidence += 25;
-  else if (cv > 0.13) afibEvidence += 8;
+  // Chỉ tính điểm khi signal đã qua bộ lọc sinh lý — tránh lãng phí compute với noise
+  if (physiologicalGate) {
+    // 1. Biến thiên RR (CV) — dùng cvCapped để tránh noise cực cao score quá nhiều
+    if (cvCapped > 0.30) afibEvidence += 35;
+    else if (cvCapped > cvThreshold) afibEvidence += 25;
+    else if (cvCapped > 0.13) afibEvidence += 8;
 
-  // 2. pNN50 — % nhịp kế tiếp chênh lệch > 50ms (trọng số 18)
-  if (pnn50 > 45) afibEvidence += 18;
-  else if (pnn50 > 28) afibEvidence += 10;
-  else if (pnn50 > 18) afibEvidence += 4;
+    // 2. pNN50 (trọng số 18)
+    if (pnn50 > 45) afibEvidence += 18;
+    else if (pnn50 > 28) afibEvidence += 10;
+    else if (pnn50 > 18) afibEvidence += 4;
 
-  // 3. SDNN — độ lệch chuẩn tổng thể (trọng số 12)
-  if (sdnn > 65) afibEvidence += 12;
-  else if (sdnn > 42) afibEvidence += 7;
+    // 3. SDNN (trọng số 12) — chỉ đếm trong phạm vi sinh lý
+    if (sdnn > 65 && sdnn <= 185) afibEvidence += 12;
+    else if (sdnn > 42) afibEvidence += 7;
 
-  // 4. Sample Entropy — đo độ hỗn loạn phi tuyến (trọng số 12)
-  if (sampEn > 1.1) afibEvidence += 12;
-  else if (sampEn > 0.85) afibEvidence += 7;
+    // 4. Sample Entropy (trọng số 12)
+    if (sampEn > 1.1) afibEvidence += 12;
+    else if (sampEn > 0.85) afibEvidence += 7;
 
-  // 5. Turning Point Ratio — AFib > 0.66 (trọng số 10)
-  if (tpr > 0.72) afibEvidence += 10;
-  else if (tpr > 0.64) afibEvidence += 5;
+    // 5. Turning Point Ratio (trọng số 10)
+    if (tpr > 0.72) afibEvidence += 10;
+    else if (tpr > 0.64) afibEvidence += 5;
 
-  // 6. Poincaré SD1/SD2 — beat-to-beat chaos > long-term (trọng số 8)
-  const poincareBoost = poincareResult.ratio > 1.0 && poincareResult.sd1 > 28;
-  if (poincareBoost) afibEvidence += 8;
-  else if (poincareResult.ratio > 0.85) afibEvidence += 3;
+    // 6. Poincaré SD1/SD2 (trọng số 8)
+    const poincareBoost = poincareResult.ratio > 1.0 && poincareResult.sd1 > 28;
+    if (poincareBoost) afibEvidence += 8;
+    else if (poincareResult.ratio > 0.85) afibEvidence += 3;
 
-  // 7. RMSSD/SDNN ratio — AFib: RMSSD lớn bất thường so với SDNN (trọng số 8)
-  if (rmssdSdnnRatio > 1.5) afibEvidence += 8;
-  else if (rmssdSdnnRatio > 1.15) afibEvidence += 4;
+    // 7. RMSSD/SDNN ratio (trọng số 8)
+    if (rmssdSdnnRatio > 1.5) afibEvidence += 8;
+    else if (rmssdSdnnRatio > 1.15) afibEvidence += 4;
 
-  // Bonus chất lượng: nhiều RR + tín hiệu tốt → tin hơn
-  if (rrIntervals.length >= 22 && signalQuality >= 78) afibEvidence += 5;
-  else if (rrIntervals.length >= 16) afibEvidence += 2;
+    // Bonus: nhiều RR + chất lượng tốt + đa phương pháp đồng thuận
+    if (rrIntervals.length >= 22 && signalQuality >= 78) afibEvidence += 5;
+    else if (rrIntervals.length >= 18) afibEvidence += 2;
+    if (methodsAgreeing >= 3) afibEvidence += 3; // bonus khi 3/4 phương pháp đồng ý
+  }
 
-  const qualityGate = 62; // thống nhất cho cả finger và face
-  const sampEnBoost = sampEn > 0.9 && cv > 0.20;
+  const qualityGate = 68; // tăng từ 62 → 68: yêu cầu signal chất lượng tốt hơn
+  const sampEnBoost = sampEn > 0.9 && cvCapped > 0.20;
 
-  // Kết luận AFib: đủ bằng chứng (score ≥ 52) VÀ đủ chất lượng VÀ đủ dữ liệu
+  // Kết luận AFib: PHẢI qua TẤT CẢ bộ lọc:
+  // 1. Bộ lọc sinh lý (physiologicalGate) — chặn noise 3 camera
+  // 2. Chất lượng signal ≥ 68%
+  // 3. Tối thiểu 18 khoảng RR
+  // 4. Điểm bằng chứng ≥ 60 (tăng từ 52)
   const afibLikelihood = (
+    physiologicalGate &&
     signalQuality >= qualityGate &&
-    rrIntervals.length >= 14 &&   // tăng từ 10 → 14: cần đủ dữ liệu trước khi kết luận
-    bpm >= 45 && bpm <= 155 &&
-    afibEvidence >= 52
+    rrIntervals.length >= 18 &&
+    afibEvidence >= 60
   );
+
+  // Nếu không qua physiologicalGate → hiển thị lý do cho UI
+  const noiseDetected = !physiologicalGate && (cv > 0.52 || sdnn > 185 || !hasCardiacFrequency || methodsAgreeing < 2);
 
   // afibScore cho UI (0-100, dùng hiển thị thanh nguy cơ)
   const afibScore = Math.round(Math.min(95, afibEvidence * 0.95));
@@ -772,9 +807,12 @@ function analyzePPGSignal(rawSamples, mode, fps) {
     sampEn,
     sd1: poincareResult.sd1, sd2: poincareResult.sd2,
     lfhfRatio: lfhf?.ratio || null,
-    tpr: Math.round(tpr * 1000) / 1000,         // Turning Point Ratio (mới)
-    rmssdSdnnRatio: Math.round(rmssdSdnnRatio * 100) / 100, // (mới)
-    afibEvidence,                                // điểm bằng chứng 0-100 (mới)
+    tpr: Math.round(tpr * 1000) / 1000,
+    rmssdSdnnRatio: Math.round(rmssdSdnnRatio * 100) / 100,
+    afibEvidence,
+    noiseDetected: noiseDetected || false,       // cờ báo nhiễu camera
+    physiologicalGate,                           // pass/fail bộ lọc sinh lý
+    methodsAgreeing,                             // số phương pháp BPM đồng thuận
     hrvScore, afibLikelihood, irregularityIndex: afibScore,
     signalQuality, lightScore, stabilityScore,
     peakCount: peaks.length, peakPositions: peaks.slice(0, 50),
@@ -2779,6 +2817,28 @@ function renderMeasurementResult(record) {
     ? ` · ⚠️ Finger PPG trên máy tính thấp hơn điện thoại (không có đèn flash)`
     : "";
   el.resultDescription.textContent = `${r.baselineStatus}. Độ tin cậy ${r.confidence}% – Chất lượng ${r.signalQuality}%${qualityNote}.`;
+
+  // Hiển thị cảnh báo nhiễu camera nếu bộ lọc sinh lý không pass
+  const noiseWarnBox = document.getElementById("signalNoiseWarning") || (() => {
+    const b = document.createElement("div"); b.id = "signalNoiseWarning";
+    el.resultDescription.insertAdjacentElement("afterend", b); return b;
+  })();
+  if (r.noiseDetected || (r.signalQuality < 55 && !r.physiologicalGate)) {
+    const reasons = [];
+    if (r.cv > 0.52) reasons.push(`CV=${r.cv} quá cao (>0.52) — ánh sáng lọt vào khe camera`);
+    if (r.sdnn > 185) reasons.push(`SDNN=${r.sdnn}ms bất thường (>185ms)`);
+    if ((r.methodsAgreeing || 0) < 2) reasons.push("Các phương pháp BPM không đồng thuận — tín hiệu không ổn định");
+    if (!r.physiologicalGate && r.afibEvidence > 0) reasons.push("Bộ lọc sinh lý không pass — kết quả không đáng tin");
+    noiseWarnBox.innerHTML = `
+      <div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;padding:12px 16px;margin:10px 0">
+        <strong style="color:#92400e">⚠️ Tín hiệu bị nhiễu — Kết quả không đáng tin cậy</strong>
+        <p style="margin:6px 0 4px;font-size:13px;color:#78350f">${reasons.join(" · ") || "Đặt ngón tay chưa đúng cách."}</p>
+        <p style="margin:0;font-size:12px;color:#92400e"><strong>Cách sửa:</strong> Đặt ngón trỏ che kín ĐỒNG THỜI camera chính + đèn flash. Không để ánh sáng lọt vào. Ấn nhẹ, giữ tuyệt đối yên.</p>
+      </div>`;
+  } else {
+    noiseWarnBox.innerHTML = "";
+  }
+
   renderRecommendationBox(r.recommendation);
   renderWaveformWithPeaks(r.waveform || [], r.rrIntervals || []); // #31 peak annotations
   renderShockIndex(r.shockIndex);
