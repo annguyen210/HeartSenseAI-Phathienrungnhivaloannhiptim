@@ -206,6 +206,19 @@
                 <button id="startBreathingBtn" class="secondary-btn" type="button">🌬 Tập thở 4-4-6</button>
               </div>
 
+              <!-- 1.8: Emoji Mood Pre-Measurement -->
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;margin-top:8px">
+                <p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#475569">😊 Trạng thái trước khi đo:</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button type="button" class="mood-btn" data-mood="great" title="Rất ổn" style="font-size:22px;background:none;border:2px solid transparent;border-radius:8px;cursor:pointer;padding:4px 8px" onclick="setPreMoodState(this,'great')">😊</button>
+                  <button type="button" class="mood-btn" data-mood="ok" title="Bình thường" style="font-size:22px;background:none;border:2px solid transparent;border-radius:8px;cursor:pointer;padding:4px 8px" onclick="setPreMoodState(this,'ok')">😐</button>
+                  <button type="button" class="mood-btn" data-mood="tired" title="Mệt mỏi" style="font-size:22px;background:none;border:2px solid transparent;border-radius:8px;cursor:pointer;padding:4px 8px" onclick="setPreMoodState(this,'tired')">😴</button>
+                  <button type="button" class="mood-btn" data-mood="stressed" title="Căng thẳng" style="font-size:22px;background:none;border:2px solid transparent;border-radius:8px;cursor:pointer;padding:4px 8px" onclick="setPreMoodState(this,'stressed')">😟</button>
+                  <button type="button" class="mood-btn" data-mood="pain" title="Khó chịu/đau" style="font-size:22px;background:none;border:2px solid transparent;border-radius:8px;cursor:pointer;padding:4px 8px" onclick="setPreMoodState(this,'pain')">😣</button>
+                </div>
+                <p id="moodHint" class="muted" style="font-size:11px;margin-top:4px">AI sẽ lọc nhiễu cảm xúc tạm thời để tránh cảnh báo nhầm (Emotional Artifact Filter)</p>
+              </div>
+
               <div class="note-box">
                 <strong>⚠️ Lưu ý quan trọng</strong>
                 <p id="captureGuide" class="muted">Nhìn thẳng vào camera, ngồi yên, đảm bảo mặt đủ sáng.</p>
@@ -558,6 +571,286 @@
               </div>
             </article>
           </div>
+
+          <!-- ══ LIST UPDATE 1 & 2: NEW FEATURE PANELS ══════════════════════════ -->
+
+          <!-- DAILY TIP + BATTERY + ELDERLY MODE (1.7 / 1.9 / 1.10) -->
+          <div class="care-grid" style="margin-bottom:16px">
+            <article class="info-panel" style="grid-column:span 2">
+              <div class="panel-head">
+                <div><p class="section-kicker">Mẹo sức khỏe hôm nay</p><h3>💡 Tip & Cảnh báo</h3></div>
+                <button id="elderlyModeBtn" class="ghost-btn" type="button" style="font-size:12px">👴 Chế độ ông/bà (chữ to)</button>
+              </div>
+              <div id="batteryWarningBox" hidden></div>
+              <div id="dailyTipBox" class="list-box" style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px"><p class="muted">Đang tải mẹo...</p></div>
+            </article>
+          </div>
+
+          <!-- 1.2: Skin Tone / BMI Calibration + 2.5: Sudden HR Alert -->
+          <div class="care-grid" style="margin-bottom:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>🎨 Hiệu chỉnh da &amp; BMI (Skin Calibration)</h3><span class="badge neutral">FibriCheck improvement</span></div>
+              <p class="muted" style="font-size:12px">FibriCheck có độ nhạy thấp hơn với người da sẫm và BMI cao. HeartSense tự động hiệu chỉnh tham số đo để bù đắp điều này.</p>
+              <form onsubmit="saveCalibrationSettings(event)" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+                <label style="font-size:12px;color:#475569">Tông da
+                  <select name="skinTone" style="width:100%;margin-top:2px;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+                    <option value="light">Sáng (I-II)</option>
+                    <option value="medium" selected>Trung bình (III-IV)</option>
+                    <option value="dark">Sẫm (V)</option>
+                    <option value="very_dark">Rất sẫm (VI)</option>
+                  </select>
+                </label>
+                <label style="font-size:12px;color:#475569">BMI của bạn
+                  <input name="bmi" type="number" min="15" max="50" value="22" placeholder="22" style="width:100%;margin-top:2px;padding:6px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box"/>
+                </label>
+                <button type="submit" class="secondary-btn" style="grid-column:span 2">💾 Lưu hiệu chỉnh</button>
+              </form>
+            </article>
+            <article class="info-panel">
+              <div class="panel-head"><h3>⚡ Phát hiện thay đổi nhịp tim đột ngột</h3><span class="badge warn">Alert 2.5</span></div>
+              <p class="muted" style="font-size:12px">Tự động phát hiện khi nhịp tim thay đổi &gt;20% so với lần đo trước — cảnh báo để bạn kiểm tra nguyên nhân.</p>
+              <div id="suddenHRBox"></div>
+            </article>
+          </div>
+
+          <!-- G3/2.1: RHYTHM CLASSIFICATION (AFib vs PAC/PVC) — MỚI NHẤT -->
+          <div class="care-grid" style="margin-bottom:16px">
+            <article class="info-panel" style="grid-column:span 2;border:2px solid #6366f1;border-radius:12px">
+              <div class="panel-head">
+                <div><p class="section-kicker" style="color:#6366f1">ĐỘC NHẤT — Không app nào có</p><h3>🔬 Phân biệt AFib vs Ngoại tâm thu (PAC/PVC)</h3></div>
+                <span class="badge" style="background:#6366f120;color:#6366f1;border:1px solid #6366f140">AI Rhythm Classifier</span>
+              </div>
+              <p class="muted">Tự động phân biệt 3 loại nhịp tim: <strong>AFib</strong> (nguy hiểm), <strong>Ngoại tâm thu PAC/PVC</strong> (lành tính), và <strong>Nhịp xoang bình thường</strong>. FibriCheck, Apple Watch không làm được điều này!</p>
+              <div id="rhythmClassBox" class="list-box"><p class="muted">Đo tim để xem phân loại nhịp tự động.</p></div>
+              <!-- RSA Index -->
+              <div style="margin-top:12px">
+                <p class="section-kicker" style="margin-bottom:4px">RSA — Chỉ số ghép cặp Tim–Phổi (Noise Rejection)</p>
+                <div id="rsaIndexBox" class="list-box"><p class="muted">Cần đủ RR intervals để tính RSA.</p></div>
+              </div>
+            </article>
+          </div>
+
+          <!-- #10: DIGITAL TWIN HEART + #5: SYNTHETIC ECG -->
+          <div class="results-grid" style="margin-bottom:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>🫀 Digital Twin — Trái tim ảo 3D</h3><span class="badge neutral">Mô phỏng thời gian thực</span></div>
+              <p class="muted" style="font-size:12px">Trái tim 3D đập theo nhịp tim thực của bạn. AFib → loạn nhịp trực quan. PAC/PVC → nhịp sớm bất thường.</p>
+              <canvas id="digitalTwinCanvas" width="280" height="180" style="width:100%;border-radius:10px;background:#0f1f3d;display:block;margin-top:8px"></canvas>
+              <p id="heartPrintId" class="muted" style="font-size:10px;margin-top:4px;text-align:center"></p>
+            </article>
+            <article class="info-panel">
+              <div class="panel-head"><h3>📈 Synthetic ECG — Sóng điện tâm đồ giả lập</h3><span class="badge neutral">Cho bác sĩ đọc</span></div>
+              <p class="muted" style="font-size:12px">Thuật toán chuyển đổi dữ liệu PPG → dạng sóng ECG để bác sĩ dễ đọc (P–QRS–T waves). Không phải ECG y tế thật.</p>
+              <div id="syntheticECGBox"><p class="muted">Đo tim để tổng hợp ECG giả lập.</p></div>
+              <!-- Estimated SpO2 -->
+              <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0">
+                <span class="section-kicker">SpO2 ước tính (non-medical)</span>
+                <div id="spO2EstResult" class="muted" style="font-size:13px;margin-top:4px">Cần đo Finger PPG để ước tính SpO2.</div>
+              </div>
+            </article>
+          </div>
+
+          <!-- G4/#9: 24h AFib FORECAST + 1-hour Hourly Map + Weather-AFib correlation -->
+          <div class="results-grid" style="margin-bottom:16px">
+            <article class="info-panel" style="border:2px solid #f59e0b20">
+              <div class="panel-head"><h3>🔮 Dự báo cửa sổ nguy hiểm 24h</h3><span class="badge warn">AI Predictive</span></div>
+              <p class="muted" style="font-size:12px">AI phân tích HRV trend + thời tiết + chu kỳ ngày đêm để dự báo nguy cơ AFib trong 24h tới. Các đối thủ chỉ báo sau khi xảy ra — HeartSense cảnh báo TRƯỚC.</p>
+              <div id="afibForecastBox" class="list-box"><p class="muted">Cần ≥3 lần đo để dự báo.</p></div>
+              <!-- 1-hour Hourly Risk Map -->
+              <div style="margin-top:12px;padding-top:10px;border-top:1px solid #e2e8f0">
+                <p class="section-kicker" style="margin-bottom:6px">📊 Bản đồ nguy cơ từng giờ (12h tới)</p>
+                <div id="afibHourlyBox" class="list-box"><p class="muted">Cần ≥3 lần đo để hiển thị bản đồ từng giờ.</p></div>
+              </div>
+            </article>
+            <article class="info-panel">
+              <div class="panel-head"><h3>🌡️ Tương quan Thời tiết – Tim mạch</h3><span class="badge neutral">Weather-AFib AI</span></div>
+              <div id="weatherAfibBox" class="list-box"><p class="muted">Đang tải dữ liệu thời tiết...</p></div>
+            </article>
+          </div>
+
+          <!-- AFib Trigger Contextual Mapping (List1 #3) -->
+          <div class="care-grid" style="margin-bottom:16px">
+            <article class="info-panel" style="grid-column:span 2;border:2px solid #e11d4820;background:linear-gradient(135deg,#fff5f5,#fff)">
+              <div class="panel-head">
+                <div><p class="section-kicker" style="color:#e11d48">Phân tích nguyên nhân — độc quyền</p><h3>🗺️ Bản đồ Nguyên nhân Rung nhĩ (AFib Trigger Map)</h3></div>
+                <span class="badge" style="background:#e11d4820;color:#e11d48;border:1px solid #e11d4830">Contextual AI</span>
+              </div>
+              <p class="muted" style="font-size:12px">Apple Watch, Holter, FibriCheck chỉ báo "Có AFib". HeartSense tìm ra <strong>TẠI SAO</strong>: thời tiết lạnh, căng thẳng, caffeine, thiếu ngủ, rượu bia... Giúp bác sĩ và bệnh nhân phòng ngừa đúng nguyên nhân.</p>
+              <div id="afibTriggerBox" class="list-box"><p class="muted">Xuất hiện tự động khi phát hiện AFib. Cần điền ghi chú trong ô "Ghi chú" trước khi đo để AI phân tích chính xác hơn.</p></div>
+            </article>
+          </div>
+
+          <!-- #7: BCG Mouse Tremor Analysis -->
+          <div class="care-grid" style="margin-bottom:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>🖱️ Phân tích Vi rung ngón tay (BCG)</h3><span class="badge neutral">Passive Monitoring</span></div>
+              <p class="muted" style="font-size:12px">Cử động chuột của bạn chứa "dấu ấn" nhịp tim — mỗi nhịp đập tạo vi rung truyền lên ngón tay. Phân tích 30 giây di chuột để sàng lọc nhịp bất thường thụ động.</p>
+              <button id="startBCGBtn" class="secondary-btn" type="button" style="margin-bottom:10px">🖱️ Bắt đầu phân tích BCG (30s)</button>
+              <div id="bcgResultBox" class="list-box"><p class="muted">Bấm nút trên và di chuột tự nhiên trong 30 giây.</p></div>
+            </article>
+            <!-- 1.3: Measurement Quality History -->
+            <article class="info-panel">
+              <div class="panel-head"><h3>📊 Lịch sử chất lượng đo</h3><span class="badge neutral">Signal Quality Log</span></div>
+              <p class="muted" style="font-size:12px">Xem lần đo nào có chất lượng tín hiệu tốt để biết thời điểm và điều kiện đo tối ưu của bạn.</p>
+              <div id="qualityHistoryBox" class="list-box"><p class="muted">Chưa có dữ liệu.</p></div>
+            </article>
+          </div>
+
+          <!-- 1.4/1.5: Golden Window + 7-day Trend -->
+          <div class="results-grid" style="margin-bottom:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>⭐ Khung giờ vàng đo tim</h3><span class="badge safe">AI Personalized</span></div>
+              <p class="muted" style="font-size:12px">AI học thói quen đo của bạn để tìm ra giờ tín hiệu ổn định nhất và nhắc đo đúng lúc.</p>
+              <div id="goldenWindowBox" class="list-box"><p class="muted">Cần ≥5 lần đo để xác định khung giờ vàng.</p></div>
+            </article>
+            <article class="info-panel">
+              <div class="panel-head"><h3>📈 So sánh xu hướng 7 ngày</h3><span class="badge neutral">Trend Analysis</span></div>
+              <p class="muted" style="font-size:12px">So sánh nhịp tim và HRV tuần này với tuần trước để thấy xu hướng sức khỏe tim mạch.</p>
+              <div id="trendComparisonBox" class="list-box"><p class="muted">Cần ≥4 lần đo để phân tích xu hướng.</p></div>
+            </article>
+          </div>
+
+          <!-- G2: Expert Mode 7-day monitoring (giả lập Holter) -->
+          <div class="care-grid" style="margin-bottom:16px">
+            <article class="info-panel" style="grid-column:span 2;border:2px solid #0f766e30;background:linear-gradient(135deg,#f0fdf4,#fff)">
+              <div class="panel-head">
+                <div><p class="section-kicker" style="color:#0f766e">Thay thế Holter ECG</p><h3>🔬 Chế độ theo dõi chuyên sâu 7 ngày (Giả lập Holter)</h3></div>
+                <span class="badge safe">Expert Mode</span>
+              </div>
+              <p class="muted">Bật chế độ này để HeartSense nhắc bạn đo tim mỗi 2 giờ trong 7 ngày liên tục — tương tự máy Holter nhưng không cần dán dây. Chi phí Holter tại VN: 500.000–2.000.000đ. HeartSense: miễn phí.</p>
+              <div class="button-row" style="margin-top:10px">
+                <button id="expertModeBtn" class="primary-btn" type="button" style="background:#0f766e">🔬 Bật chế độ theo dõi 7 ngày (giả lập Holter)</button>
+                <button id="shareReportBtn" class="secondary-btn" type="button">📤 Chia sẻ báo cáo</button>
+                <button onclick="shareReport('zalo')" class="secondary-btn" type="button" style="background:#0068ff;color:#fff;border-color:#0068ff">💬 Gửi Zalo</button>
+                <button onclick="shareReport('gmail')" class="secondary-btn" type="button" style="background:#ea4335;color:#fff;border-color:#ea4335">📧 Gmail</button>
+              </div>
+              <div id="expertModeStatus" class="muted" style="margin-top:8px;font-size:12px"></div>
+            </article>
+          </div>
+
+          <!-- 2.6: Blood Pressure OCR -->
+          <div class="care-grid" style="margin-bottom:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>📸 Đọc huyết áp từ ảnh (OCR)</h3><span class="badge neutral">BP OCR</span></div>
+              <p class="muted" style="font-size:12px">Chụp ảnh màn hình máy đo huyết áp → AI tự động đọc số liệu và nhập vào hệ thống.</p>
+              <input type="file" id="bpPhotoInput" accept="image/*" capture="environment" style="display:none"/>
+              <div class="button-row" style="margin-top:8px">
+                <button class="secondary-btn" onclick="document.getElementById('bpPhotoInput').click()">📷 Chụp ảnh máy đo HA</button>
+              </div>
+              <div id="bpOCRStatus" class="muted" style="font-size:12px;margin-top:6px"></div>
+              <div class="button-row" style="margin-top:8px;gap:6px">
+                <div style="flex:1"><label style="font-size:12px;color:#64748b">Tâm thu (mmHg)<input id="bpSysInput" type="number" min="60" max="220" placeholder="120" style="width:100%;margin-top:2px"/></label></div>
+                <div style="flex:1"><label style="font-size:12px;color:#64748b">Tâm trương (mmHg)<input id="bpDiaInput" type="number" min="40" max="150" placeholder="80" style="width:100%;margin-top:2px"/></label></div>
+              </div>
+            </article>
+            <!-- G5: Post-ablation risk prediction -->
+            <article class="info-panel">
+              <div class="panel-head"><h3>⚕️ Dự báo tái phát sau cắt đốt (Ablation)</h3><span class="badge neutral">DECAAF II Model</span></div>
+              <p class="muted" style="font-size:12px">Dựa trên nghiên cứu DECAAF II (AHA Journal) — dự báo nguy cơ AFib tái phát sau thủ thuật cắt đốt.</p>
+              <form id="ablationRiskForm" class="stack-form">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                  <label style="font-size:12px">Tuổi <input name="ablAge" type="number" min="18" max="90" value="62" style="margin-top:2px"/></label>
+                  <label style="font-size:12px">BMI <input name="ablBmi" type="number" min="15" max="50" value="25" style="margin-top:2px"/></label>
+                  <label style="font-size:12px">Loại AFib
+                    <select name="ablType" style="margin-top:2px">
+                      <option value="paroxysmal">Kịch phát</option>
+                      <option value="persistent">Liên tục</option>
+                    </select>
+                  </label>
+                  <label style="font-size:12px">LAVI (ml/m²) <input name="ablLavi" type="number" min="15" max="80" value="30" placeholder="Từ siêu âm" style="margin-top:2px"/></label>
+                  <label style="font-size:12px">Thời gian AFib (tháng) <input name="ablDuration" type="number" min="0" max="120" value="6" style="margin-top:2px"/></label>
+                  <label style="font-size:12px">Triệu chứng
+                    <select name="ablSymptoms" style="margin-top:2px">
+                      <option value="mild">Nhẹ</option>
+                      <option value="moderate">Vừa</option>
+                      <option value="severe">Nặng</option>
+                    </select>
+                  </label>
+                </div>
+                <button class="primary-btn" type="submit" style="margin-top:8px">📊 Tính nguy cơ tái phát</button>
+              </form>
+              <div id="ablationRiskResult" class="list-box" style="margin-top:8px"><p class="muted">Điền thông tin để dự báo.</p></div>
+            </article>
+          </div>
+
+          <!-- List1 #1: Ambient rPPG Background Passive Screening -->
+          <div class="care-grid" style="margin-bottom:16px">
+            <article class="info-panel" style="grid-column:span 2;border:2px solid #7c3aed30;background:linear-gradient(135deg,#faf5ff,#fff)">
+              <div class="panel-head">
+                <div><p class="section-kicker" style="color:#7c3aed">ĐỘT PHÁ #1 — Không FibriCheck/CardioSignal nào làm được</p><h3>👁 Sàng lọc thầm lặng liên tục (Ambient rPPG)</h3></div>
+                <span class="badge" style="background:#7c3aed20;color:#7c3aed;border:1px solid #7c3aed40">Passive Continuous</span>
+              </div>
+              <p class="muted">Trong khi bạn đang làm việc trên máy tính, HeartSense quét mặt bạn qua webcam mỗi 3 phút để tầm soát AFib thầm lặng. Không cần bấm gì, không cần nhớ đo. Holter ECG cũng chỉ làm được điều này nhưng cần dán dây 24h!</p>
+              <div class="button-row" style="margin-top:10px">
+                <button id="ambientRPPGBtn" class="primary-btn" type="button" style="background:#7c3aed">👁 Bật sàng lọc thầm lặng</button>
+              </div>
+              <div id="ambientRPPGStatus" class="muted" style="margin-top:6px;font-size:12px">Chưa bật. Cần quyền truy cập webcam.</div>
+              <div id="ambientRPPGResult" class="list-box" style="margin-top:8px;max-height:120px;overflow-y:auto"><p class="muted">Kết quả sàng lọc tự động sẽ xuất hiện ở đây.</p></div>
+            </article>
+          </div>
+
+          <!-- List1 #4: Bi-Modal SCG + List1 #6: Voice-rPPG -->
+          <div class="results-grid" style="margin-bottom:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>📳 Đo Bi-Modal: PPG + SCG (Cơ học tim)</h3><span class="badge neutral">CardioSignal killer</span></div>
+              <p class="muted" style="font-size:12px">CardioSignal chỉ dùng cảm biến cơ học. FibriCheck chỉ dùng quang học. HeartSense kết hợp CẢ HAI: ngón tay đặt camera sau (PPG), đồng thời áp điện thoại vào ngực (SCG).</p>
+              <button id="startSCGBtn" class="secondary-btn" type="button" style="margin-top:8px;background:#059669;color:#fff;border:none">📳 Bắt đầu đo SCG (áp điện thoại vào ngực)</button>
+              <div id="scgStatus" class="muted" style="font-size:12px;margin-top:6px">Chỉ hoạt động trên thiết bị di động có cảm biến chuyển động.</div>
+              <div id="scgResultBox" class="list-box" style="margin-top:8px"><p class="muted">Kết quả SCG sẽ hiện sau khi đo xong.</p></div>
+            </article>
+            <article class="info-panel">
+              <div class="panel-head"><h3>🎤 Voice-rPPG — Phân tích nhịp tim qua giọng nói</h3><span class="badge neutral">Phòng khám mọi lúc</span></div>
+              <p class="muted" style="font-size:12px">Khi tim loạn nhịp (AFib), áp lực máu lên dây thanh quản thay đổi tạo ra micro-tremor trong giọng nói. AI phân tích microphone song song với Face PPG để bù trừ nhiễu lẫn nhau.</p>
+              <button id="startVoiceRPPGBtn" class="secondary-btn" type="button" style="margin-top:8px">🎤 Bắt đầu Voice-rPPG (30s)</button>
+              <div id="voiceRPPGStatus" class="muted" style="font-size:12px;margin-top:6px">Cần quyền truy cập microphone.</div>
+              <div id="voiceRPPGResultBox" class="list-box" style="margin-top:8px"><p class="muted">Kết quả phân tích giọng nói sẽ hiện ở đây.</p></div>
+            </article>
+          </div>
+
+          <!-- Keyboard BCG + PPG-Thermal Cross-Map -->
+          <div class="results-grid" style="margin-bottom:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>⌨️ BCG Bàn phím — Phân tích nhịp gõ phím</h3><span class="badge neutral">Digital Phenotyping</span></div>
+              <p class="muted" style="font-size:12px">Mỗi nhịp tim đập tạo vi rung truyền lên ngón tay gõ phím. AI phân tích nhịp điệu gõ phím trong 60 giây để phát hiện bất thường — không cần chạm camera!</p>
+              <button id="startKBCGBtn" class="secondary-btn" type="button" style="margin-top:8px">⌨️ Bắt đầu phân tích BCG bàn phím (60s)</button>
+              <div id="kbcgStatus" class="muted" style="font-size:12px;margin-top:6px">Gõ tự nhiên để phân tích.</div>
+              <div id="kbcgResultBox" class="list-box" style="margin-top:8px"><p class="muted">Gõ phím tự nhiên 60 giây sau khi bắt đầu.</p></div>
+            </article>
+            <article class="info-panel">
+              <div class="panel-head"><h3>🌡️ PPG-Thermal Cross-Map (Vi tuần hoàn)</h3><span class="badge neutral">Perfusion Proxy</span></div>
+              <p class="muted" style="font-size:12px">Phân tích phân bố màu sắc trên các vùng da mặt (mũi, má) để phát hiện giảm tưới máu ngoại vi — dấu hiệu của co mạch do lạnh hoặc AFib.</p>
+              <div id="thermalProxyBox" class="list-box"><p class="muted">Kết quả xuất hiện tự động sau khi đo Face PPG.</p></div>
+              <!-- Emotional artifact note -->
+              <div id="emotionalArtifactNote" style="display:none;margin-top:8px;padding:8px 12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;font-size:12px;color:#92400e"></div>
+            </article>
+          </div>
+
+          <!-- Encrypted Local-First Data (List1 #18) -->
+          <div class="care-grid" style="margin-bottom:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>🔏 Mã hóa đầu cuối dữ liệu y tế (AES-256)</h3><span class="badge safe">Privacy-First</span></div>
+              <p class="muted" style="font-size:12px">Dữ liệu đo tim nhạy cảm được mã hóa AES-256-GCM ngay trên thiết bị của bạn (Edge Computing). Không ai — kể cả HeartSense — có thể đọc nếu không có thiết bị gốc.</p>
+              <div id="encryptionStatusBox" class="list-box" style="margin-top:8px"><p class="muted">Đang khởi tạo mã hóa...</p></div>
+            </article>
+          </div>
+
+          <!-- G6/C: Zalo Tele-Clinic + Research Mode -->
+          <div class="results-grid" style="margin-bottom:16px">
+            <article class="info-panel">
+              <div class="panel-head"><h3>💬 Bác sĩ từ xa qua Zalo (Tele-Clinic VN)</h3><span class="badge neutral">Đang phát triển</span></div>
+              <p class="muted" style="font-size:12px">Kết nối bệnh nhân với mạng lưới bác sĩ tim mạch Việt Nam qua Zalo. HeartSense sẽ là app AFib duy nhất tích hợp hệ sinh thái y tế VN.</p>
+              <button id="zaloClinicInfoBtn" class="secondary-btn" style="margin-top:8px" type="button">📋 Xem thông tin đăng ký</button>
+              <div id="zaloClinicBox" class="list-box" style="margin-top:8px"></div>
+            </article>
+            <article class="info-panel">
+              <div class="panel-head"><h3>🔬 Đóng góp cho nghiên cứu AFib Việt Nam</h3><span class="badge neutral">Research Mode</span></div>
+              <p class="muted" style="font-size:12px">Chia sẻ dữ liệu ẩn danh (không có thông tin cá nhân) để đóng góp cho bộ dữ liệu AFib lớn nhất Đông Nam Á. Giúp cải thiện AI cho tất cả người dùng.</p>
+              <button id="researchModeBtn" class="secondary-btn" type="button" style="margin-top:8px">🔬 Tham gia nghiên cứu ẩn danh</button>
+              <div id="researchModeStatus" class="muted" style="font-size:12px;margin-top:6px"></div>
+            </article>
+          </div>
+
+          <!-- ══ END NEW FEATURES ══════════════════════════════════════════════ -->
 
           <!-- Lịch sử đo + SOS + Ledger -->
           <div class="history-grid">

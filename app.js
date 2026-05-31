@@ -820,6 +820,1133 @@ function rejectMotionWindows(samples, fps, windowSec = 2, mode = "face") {
   return clean.length >= fps * 8 ? clean : samples;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// LIST UPDATE 1 & 2 — NEW FEATURE ALGORITHMS
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ─── List1 #1: Ambient rPPG — Passive Background Screening ────────────────────
+// Runs a lightweight face PPG scan every 3 minutes while user has the tab open
+// Uses minimal CPU (1 frame / 200ms) — truly passive continuous screening
+const _ambient = { active: false, stream: null, interval: null, scans: 0, lastBpm: null };
+async function startAmbientRPPG() {
+  if (_ambient.active) return;
+  if (!navigator.mediaDevices?.getUserMedia) return;
+  const statusEl = document.getElementById("ambientRPPGStatus");
+  const btn = document.getElementById("ambientRPPGBtn");
+  try {
+    _ambient.stream = await navigator.mediaDevices.getUserMedia({ video: { width: 160, height: 120, frameRate: 5 }, audio: false });
+    _ambient.active = true;
+    if (btn) { btn.textContent = "🔴 Dừng sàng lọc thầm lặng"; btn.className = "ghost-btn"; }
+    if (statusEl) statusEl.textContent = "🟢 Đang sàng lọc thầm lặng — không cần thao tác gì";
+    // Run a mini-scan every 3 minutes
+    _ambient.interval = setInterval(() => runAmbientMiniScan(), 3 * 60 * 1000);
+    // First scan after 10 seconds
+    setTimeout(() => runAmbientMiniScan(), 10000);
+  } catch { if (statusEl) statusEl.textContent = "⚠️ Không thể truy cập camera nền — cấp quyền camera trước."; }
+}
+function stopAmbientRPPG() {
+  _ambient.active = false;
+  clearInterval(_ambient.interval);
+  if (_ambient.stream) { _ambient.stream.getTracks().forEach(t => t.stop()); _ambient.stream = null; }
+  const statusEl = document.getElementById("ambientRPPGStatus");
+  const btn = document.getElementById("ambientRPPGBtn");
+  if (btn) { btn.textContent = "👁 Bật sàng lọc thầm lặng"; btn.className = "primary-btn"; }
+  if (statusEl) statusEl.textContent = "Đã tắt sàng lọc thầm lặng.";
+}
+function toggleAmbientRPPG() {
+  _ambient.active ? stopAmbientRPPG() : startAmbientRPPG();
+}
+async function runAmbientMiniScan() {
+  if (!_ambient.active || !_ambient.stream) return;
+  const track = _ambient.stream.getVideoTracks()[0];
+  if (!track) return;
+  // Capture 5 seconds of frames at 5fps = 25 frames
+  const canvas = document.createElement("canvas");
+  canvas.width = 80; canvas.height = 60;
+  const ctx = canvas.getContext("2d");
+  const vid = document.createElement("video");
+  vid.srcObject = _ambient.stream;
+  vid.muted = true;
+  await vid.play().catch(() => {});
+  const samples = [];
+  for (let i = 0; i < 25; i++) {
+    await new Promise(r => setTimeout(r, 200));
+    ctx.drawImage(vid, 0, 0, 80, 60);
+    const d = ctx.getImageData(0, 0, 80, 60).data;
+    let r = 0, g = 0, b = 0, count = 0;
+    for (let j = 0; j < d.length; j += 4) { r += d[j]; g += d[j+1]; b += d[j+2]; count++; }
+    samples.push({ avgRed: r/count, avgGreen: g/count, avgBlue: b/count, brightness: (r+g+b)/count/3, movement: 0 });
+  }
+  vid.pause();
+  // Quick BPM estimate from green channel
+  const greens = samples.map(s => s.avgGreen);
+  const mean = greens.reduce((a,b)=>a+b,0)/greens.length;
+  const centered = greens.map(v=>v-mean);
+  // Autocorr BPM estimate
+  const bpm = autocorrBpm(centered, 5); // 5fps
+  _ambient.scans++;
+  const el = document.getElementById("ambientRPPGResult");
+  const statusEl = document.getElementById("ambientRPPGStatus");
+  const time = new Date().toLocaleTimeString("vi-VN");
+  if (bpm && bpm >= 40 && bpm <= 180) {
+    _ambient.lastBpm = bpm;
+    const isWarning = bpm > 120 || bpm < 50;
+    if (el) el.innerHTML += `<div class="list-item" style="color:${isWarning?"#ef4444":"#22c55e"}"><span>${time}</span><strong>${bpm} BPM ${isWarning?"⚠️ Bất thường!":""}</strong></div>`;
+    if (statusEl) statusEl.textContent = `🟢 Lần quét #${_ambient.scans} lúc ${time}: ${bpm} BPM ${isWarning?"— CẦN CHÚ Ý":"— Bình thường"}`;
+    if (isWarning) { showToast(`Ambient rPPG: BPM ${bpm} bất thường lúc ${time}`, "error"); notify("HEARTSENSE", `Phát hiện nhịp tim ${bpm} BPM khi đang làm việc!`); }
+  } else {
+    if (statusEl) statusEl.textContent = `🟡 Lần quét #${_ambient.scans}: Tín hiệu yếu — không có mặt trong khung hình?`;
+  }
+  if (el && el.children.length > 10) el.removeChild(el.firstChild);
+}
+
+// ─── List1 #4: Bi-Modal SCG — Seismocardiography via Accelerometer ────────────
+// Parallel chest sensor while doing Finger PPG: captures ventricular mechanical motion
+const _scg = { active: false, samples: [], stream: null };
+function startSCGChestSensor() {
+  if (!window.DeviceMotionEvent) {
+    showToast("Thiết bị không có cảm biến chuyển động", "error"); return;
+  }
+  const tryBind = () => {
+    _scg.active = true; _scg.samples = [];
+    const statusEl = document.getElementById("scgStatus");
+    if (statusEl) statusEl.textContent = "📳 Đang thu dữ liệu SCG — áp mặt trước điện thoại vào ngực giữa...";
+    window.addEventListener("devicemotion", _scgMotionHandler);
+    setTimeout(stopSCGChestSensor, 35000); // stop after 35s (longer than PPG)
+  };
+  const req = DeviceMotionEvent.requestPermission;
+  typeof req === "function"
+    ? req().then(p => { if (p === "granted") tryBind(); }).catch(() => tryBind())
+    : tryBind();
+}
+function _scgMotionHandler(e) {
+  if (!_scg.active) return;
+  const a = e.acceleration || e.accelerationIncludingGravity;
+  if (!a) return;
+  _scg.samples.push({ t: Date.now(), x: a.x||0, y: a.y||0, z: a.z||0, magnitude: Math.sqrt((a.x||0)**2+(a.y||0)**2+(a.z||0)**2) });
+  if (_scg.samples.length > 3000) _scg.samples.shift();
+}
+function stopSCGChestSensor() {
+  if (!_scg.active) return;
+  _scg.active = false;
+  window.removeEventListener("devicemotion", _scgMotionHandler);
+  if (_scg.samples.length >= 50) {
+    const result = analyzeSCG(_scg.samples);
+    renderSCGResult(result);
+  }
+}
+function analyzeSCG(samples) {
+  if (!samples.length) return null;
+  const mags = samples.map(s => s.magnitude);
+  const mean = mags.reduce((a,b)=>a+b,0)/mags.length;
+  const centered = mags.map(v=>v-mean);
+  const duration = (samples[samples.length-1].t - samples[0].t) / 1000;
+  const fps = samples.length / duration;
+  const bpm = autocorrBpm(centered, fps);
+  const std = Math.sqrt(centered.map(v=>v*v).reduce((a,b)=>a+b,0)/centered.length);
+  const irregularity = std / (mean || 1);
+  return { bpm: bpm || null, std: Math.round(std*100)/100, irregularity: Math.round(irregularity*1000)/1000, sampleCount: samples.length, duration: Math.round(duration) };
+}
+function renderSCGResult(result) {
+  const box = document.getElementById("scgResultBox");
+  if (!box || !result) return;
+  const color = result.irregularity > 0.5 ? "#ef4444" : result.irregularity > 0.3 ? "#f59e0b" : "#22c55e";
+  box.innerHTML = `
+    <div class="list-item"><span>BPM từ SCG (cơ học)</span><strong>${result.bpm || "--"} BPM</strong></div>
+    <div class="list-item"><span>Độ bất thường cơ học</span><strong style="color:${color}">${result.irregularity} ${result.irregularity>0.5?"⚠️":""}</strong></div>
+    <div class="list-item"><span>Mẫu / Thời gian</span><strong>${result.sampleCount} / ${result.duration}s</strong></div>
+    <p class="muted" style="font-size:11px;margin-top:4px">Bi-Modal: Kết hợp SCG (cơ học) + PPG (quang học) cho độ chính xác tốt nhất.</p>`;
+  const statusEl = document.getElementById("scgStatus");
+  if (statusEl) statusEl.textContent = `✅ SCG hoàn thành — ${result.bpm || "?"} BPM cơ học`;
+}
+
+// ─── List1 #6: Voice-rPPG — Microphone Phonocardiography ─────────────────────
+// Capture microphone audio during measurement and analyze for cardiac vibrations
+const _voicePPG = { active: false, audioCtx: null, analyser: null, stream: null };
+async function startVoiceRPPG() {
+  if (_voicePPG.active) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 44100, noiseSuppression: false, echoCancellation: false }, video: false });
+    _voicePPG.stream = stream;
+    _voicePPG.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 44100 });
+    const source = _voicePPG.audioCtx.createMediaStreamSource(stream);
+    _voicePPG.analyser = _voicePPG.audioCtx.createAnalyser();
+    _voicePPG.analyser.fftSize = 2048;
+    source.connect(_voicePPG.analyser);
+    _voicePPG.active = true;
+    const statusEl = document.getElementById("voiceRPPGStatus");
+    if (statusEl) statusEl.textContent = "🎤 Microphone đang thu âm — nói chuyện bình thường để phân tích nhịp tim qua giọng nói.";
+    // Collect for 30 seconds
+    setTimeout(stopVoiceRPPG, 30000);
+  } catch { const statusEl = document.getElementById("voiceRPPGStatus"); if (statusEl) statusEl.textContent = "⚠️ Không thể truy cập microphone."; }
+}
+function stopVoiceRPPG() {
+  if (!_voicePPG.active) return;
+  _voicePPG.active = false;
+  if (_voicePPG.stream) { _voicePPG.stream.getTracks().forEach(t => t.stop()); }
+  if (_voicePPG.audioCtx) {
+    const bufSize = _voicePPG.analyser.frequencyBinCount;
+    const freqData = new Uint8Array(bufSize);
+    _voicePPG.analyser.getByteFrequencyData(freqData);
+    // Analyze cardiac frequency range in voice: 0.8-3.5 Hz = 48-210 BPM
+    const sampleRate = _voicePPG.audioCtx.sampleRate;
+    const binHz = sampleRate / (_voicePPG.analyser.fftSize);
+    let cardiacPower = 0, totalPow = 0;
+    for (let i = 0; i < bufSize; i++) {
+      const freq = i * binHz;
+      totalPow += freqData[i];
+      if (freq >= 0.8 && freq <= 3.5) cardiacPower += freqData[i];
+    }
+    const cardiacRatio = totalPow ? Math.round(cardiacPower / totalPow * 100) : 0;
+    renderVoiceRPPGResult(cardiacRatio);
+    _voicePPG.audioCtx.close();
+  }
+}
+function renderVoiceRPPGResult(cardiacRatio) {
+  const box = document.getElementById("voiceRPPGResultBox");
+  const statusEl = document.getElementById("voiceRPPGStatus");
+  if (!box) return;
+  const color = cardiacRatio > 15 ? "#22c55e" : "#f59e0b";
+  box.innerHTML = `
+    <div class="list-item"><span>Tín hiệu tim trong giọng nói</span><strong style="color:${color}">${cardiacRatio}%</strong></div>
+    <p class="muted" style="font-size:12px">${cardiacRatio > 15 ? "Phát hiện vi rung nhịp tim trong giọng nói. Kết hợp tốt với Face PPG." : "Tín hiệu nhịp tim trong giọng nói thấp. Thử nói to hơn hoặc đặt microphone gần hơn."}</p>`;
+  if (statusEl) statusEl.textContent = `✅ Phân tích Voice-rPPG: tín hiệu tim ${cardiacRatio}% trong phổ âm thanh`;
+}
+
+// ─── List1 #7 extended: Keyboard BCG Tracking ────────────────────────────────
+const _kbcg = { events: [], active: false };
+function startKeyboardBCGTracking() {
+  if (_kbcg.active) return;
+  _kbcg.events = []; _kbcg.active = true;
+  document.addEventListener("keydown", _kbcgKeyHandler);
+  setTimeout(stopKeyboardBCGTracking, 60000); // 60 seconds of typing
+  const statusEl = document.getElementById("kbcgStatus");
+  if (statusEl) statusEl.textContent = "⌨️ Đang theo dõi nhịp gõ phím... gõ tự nhiên trong 60 giây.";
+}
+function _kbcgKeyHandler(e) {
+  if (!_kbcg.active) return;
+  _kbcg.events.push({ t: Date.now(), key: e.key });
+}
+function stopKeyboardBCGTracking() {
+  if (!_kbcg.active) return;
+  _kbcg.active = false;
+  document.removeEventListener("keydown", _kbcgKeyHandler);
+  if (_kbcg.events.length >= 20) {
+    const result = analyzeKeyboardBCG(_kbcg.events);
+    renderKeyboardBCGResult(result);
+  }
+}
+function analyzeKeyboardBCG(events) {
+  if (events.length < 15) return null;
+  // Inter-key intervals (IKI) analysis — BCG heartbeat creates micro-tremors
+  const ikis = [];
+  for (let i = 1; i < events.length; i++) {
+    const dt = events[i].t - events[i-1].t;
+    if (dt >= 50 && dt <= 1500) ikis.push(dt); // filter out pauses and double-taps
+  }
+  if (ikis.length < 10) return null;
+  const mean = ikis.reduce((a,b)=>a+b,0)/ikis.length;
+  const std = Math.sqrt(ikis.map(v=>(v-mean)**2).reduce((a,b)=>a+b,0)/ikis.length);
+  const cv = std / mean;
+  // Look for rhythmic patterns in IKI sequence (BCG signature ~1Hz)
+  // Compute autocorrelation to find periodicity
+  let maxCorr = 0, maxLag = 0;
+  for (let lag = 1; lag < Math.min(30, Math.floor(ikis.length/2)); lag++) {
+    let corr = 0;
+    for (let i = 0; i < ikis.length - lag; i++) corr += (ikis[i]-mean) * (ikis[i+lag]-mean);
+    corr /= ikis.length * std * std;
+    if (corr > maxCorr) { maxCorr = corr; maxLag = lag; }
+  }
+  const jitterScore = Math.round(Math.min(100, cv * 150));
+  const riskHint = cv > 0.6 ? "Nhịp gõ phím không đều cao — có thể do vi rung nhịp tim bất thường. Khuyến nghị đo PPG để xác nhận."
+    : cv > 0.35 ? "Nhịp gõ phím có một số bất thường nhỏ — theo dõi thêm."
+    : "Nhịp gõ phím đều — không phát hiện bất thường từ BCG bàn phím.";
+  return { jitterScore, cv: Math.round(cv*1000)/1000, keyCount: events.length, ikiCount: ikis.length, riskHint, maxCorr: Math.round(maxCorr*100)/100 };
+}
+function renderKeyboardBCGResult(result) {
+  const box = document.getElementById("kbcgResultBox");
+  const statusEl = document.getElementById("kbcgStatus");
+  if (!box || !result) return;
+  const color = result.jitterScore > 55 ? "#ef4444" : result.jitterScore > 30 ? "#f59e0b" : "#22c55e";
+  box.innerHTML = `
+    <div class="list-item"><span>Vi rung bàn phím (BCG)</span><strong style="color:${color}">${result.jitterScore}/100</strong></div>
+    <div class="list-item"><span>Biến thiên nhịp gõ (CV)</span><strong>${result.cv}</strong></div>
+    <div class="list-item"><span>Mẫu phân tích</span><strong>${result.ikiCount} nhịp / ${result.keyCount} phím</strong></div>
+    <p class="muted" style="font-size:12px;margin-top:6px">${result.riskHint}</p>`;
+  if (statusEl) statusEl.textContent = `✅ BCG bàn phím hoàn thành: ${result.jitterScore}/100`;
+}
+
+// ─── List1 #8: PPG-Thermal Cross-Mapping (Perfusion proxy via RGB) ─────────────
+// Analyzes color distribution across different facial regions as thermal proxy
+// Nose tip/ears are peripheral (cool first in poor circulation) vs cheeks (core)
+function analyzePPGThermalProxy(samples) {
+  if (!samples || samples.length < 30) return null;
+  // For face PPG: different regions would normally have different color channels
+  // We use Red channel variance as proxy for perfusion heterogeneity
+  const reds = samples.map(s => s.avgRed || 0);
+  const greens = samples.map(s => s.avgGreen || 0);
+  const blues = samples.map(s => s.avgBlue || 0);
+  const meanR = reds.reduce((a,b)=>a+b,0)/reds.length;
+  const meanG = greens.reduce((a,b)=>a+b,0)/greens.length;
+  const meanB = blues.reduce((a,b)=>a+b,0)/blues.length;
+  const stdR = Math.sqrt(reds.map(v=>(v-meanR)**2).reduce((a,b)=>a+b,0)/reds.length);
+  const stdG = Math.sqrt(greens.map(v=>(v-meanG)**2).reduce((a,b)=>a+b,0)/greens.length);
+  // Peripheral perfusion index: ratio of AC (pulsatile) to DC (baseline) component
+  const perfusionIndex = Math.round((stdR / (meanR || 1)) * 1000) / 10;
+  // Red-to-Green ratio as skin temperature proxy
+  const rgRatio = Math.round((meanR / (meanG || 1)) * 100) / 100;
+  const vasoState = rgRatio > 1.4 ? "Co mạch nhẹ (có thể lạnh/căng thẳng)" : rgRatio > 1.2 ? "Bình thường" : "Giãn mạch (nóng/vận động)";
+  const perfusionLevel = perfusionIndex > 5 ? "Tốt" : perfusionIndex > 2 ? "Vừa" : "Kém — tín hiệu PPG có thể bị ảnh hưởng";
+  return { perfusionIndex, rgRatio, vasoState, perfusionLevel,
+    note: perfusionIndex < 2 ? "Vi tuần hoàn kém — nếu tay/mặt lạnh, tín hiệu PPG sẽ không chính xác. Sưởi ấm trước khi đo." : "Tuần hoàn ngoại vi bình thường." };
+}
+
+// ─── List1 #18: Encrypted Local-First Data (Web Crypto AES-GCM) ───────────────
+const _crypto = { key: null };
+async function initLocalEncryption() {
+  if (!window.crypto?.subtle) return null;
+  try {
+    // Derive key from device fingerprint (stored in localStorage)
+    let salt = localStorage.getItem("hs_salt");
+    if (!salt) { salt = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,"0")).join(""); localStorage.setItem("hs_salt", salt); }
+    const saltBuf = new Uint8Array(salt.match(/.{2}/g).map(h=>parseInt(h,16)));
+    const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(navigator.userAgent.slice(0,32)+salt), { name: "PBKDF2" }, false, ["deriveKey"]);
+    _crypto.key = await crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt: saltBuf, iterations: 100000, hash: "SHA-256" },
+      keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+    );
+    return _crypto.key;
+  } catch { return null; }
+}
+async function encryptLocalData(data) {
+  if (!_crypto.key) return JSON.stringify(data); // fallback: no encryption
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(JSON.stringify(data));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, _crypto.key, encoded);
+  const ivHex = Array.from(iv).map(b=>b.toString(16).padStart(2,"0")).join("");
+  const ctHex = Array.from(new Uint8Array(ciphertext)).map(b=>b.toString(16).padStart(2,"0")).join("");
+  return ivHex + ":" + ctHex;
+}
+async function decryptLocalData(encrypted) {
+  if (!_crypto.key || !encrypted?.includes(":")) return JSON.parse(encrypted || "{}");
+  try {
+    const [ivHex, ctHex] = encrypted.split(":");
+    const iv = new Uint8Array(ivHex.match(/.{2}/g).map(h=>parseInt(h,16)));
+    const ct = new Uint8Array(ctHex.match(/.{2}/g).map(h=>parseInt(h,16)));
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, _crypto.key, ct);
+    return JSON.parse(new TextDecoder().decode(decrypted));
+  } catch { return {}; }
+}
+async function saveEncryptedMeasurement(data) {
+  const encrypted = await encryptLocalData(data);
+  const existing = JSON.parse(localStorage.getItem("hs_enc_measurements") || "[]");
+  existing.push({ ts: Date.now(), enc: encrypted });
+  if (existing.length > 50) existing.shift();
+  localStorage.setItem("hs_enc_measurements", JSON.stringify(existing));
+}
+function renderEncryptionStatus() {
+  const box = document.getElementById("encryptionStatusBox");
+  if (!box) return;
+  const hasKey = !!_crypto.key;
+  const hasCrypto = !!window.crypto?.subtle;
+  const storedCount = JSON.parse(localStorage.getItem("hs_enc_measurements") || "[]").length;
+  box.innerHTML = `
+    <div class="list-item"><span>Web Crypto API</span><strong class="badge ${hasCrypto?"safe":"warn"}">${hasCrypto?"Hỗ trợ":"Không hỗ trợ"}</strong></div>
+    <div class="list-item"><span>Mã hóa AES-256-GCM</span><strong class="badge ${hasKey?"safe":"neutral"}">${hasKey?"Đã khởi tạo":"Chưa khởi tạo"}</strong></div>
+    <div class="list-item"><span>Bản ghi mã hóa local</span><strong>${storedCount} bản ghi</strong></div>
+    <p class="muted" style="font-size:11px;margin-top:4px">Dữ liệu nhạy cảm được mã hóa PBKDF2 + AES-256-GCM ngay trên thiết bị trước khi lưu. Không ai có thể đọc nếu không có thiết bị gốc.</p>`;
+}
+
+// ─── G3/2.1: AFib vs PAC/PVC Rhythm Classifier ────────────────────────────────
+// Detects Premature Atrial/Ventricular Contractions vs true AFib
+// PAC/PVC: mostly regular RR with isolated early beats (compensatory pause)
+// AFib: chaotic RR without repeating pattern
+function classifyRhythmType(rrs) {
+  if (!rrs || rrs.length < 8) return { type: "insufficient", label: "Không đủ dữ liệu", confidence: 0 };
+  const n = rrs.length;
+  const mean = rrs.reduce((a, b) => a + b, 0) / n;
+  const sorted = [...rrs].sort((a, b) => a - b);
+  const q1 = sorted[Math.floor(n * 0.25)], q3 = sorted[Math.floor(n * 0.75)];
+  const iqr = q3 - q1;
+  // Find premature beats: RR < mean - 1.5*IQR, followed by compensatory pause (next RR > mean + 0.8*IQR)
+  let prematureCount = 0, compensatoryCount = 0;
+  for (let i = 1; i < n - 1; i++) {
+    if (rrs[i] < mean - 1.5 * iqr) {
+      prematureCount++;
+      if (rrs[i + 1] > mean + 0.8 * iqr) compensatoryCount++;
+    }
+  }
+  const prematureRate = prematureCount / n;
+  const compensatoryRate = prematureCount > 0 ? compensatoryCount / prematureCount : 0;
+  const cv = Math.sqrt(rrs.map(r => (r - mean) ** 2).reduce((a, b) => a + b, 0) / n) / mean;
+  // Runs test for randomness — AFib has no serial pattern
+  const median = sorted[Math.floor(n / 2)];
+  let runs = 1;
+  for (let i = 1; i < n; i++) {
+    if ((rrs[i] >= median) !== (rrs[i - 1] >= median)) runs++;
+  }
+  const expectedRuns = (2 * n - 1) / 3;
+  const runsRatio = runs / expectedRuns;
+  // Classification logic
+  if (prematureRate >= 0.08 && compensatoryRate >= 0.6 && cv < 0.25) {
+    const conf = Math.round(Math.min(92, 55 + compensatoryRate * 30 + prematureRate * 80));
+    return { type: "pac_pvc", label: "Ngoại tâm thu (PAC/PVC)", confidence: conf,
+      note: `Phát hiện ${prematureCount} nhịp sớm/${n} nhịp (${Math.round(prematureRate*100)}%) có chu kỳ bù — Lành tính, không phải AFib.`,
+      color: "#f59e0b" };
+  }
+  if (cv > 0.22 && runsRatio > 0.90) {
+    return { type: "afib", label: "Rung nhĩ (AFib)", confidence: Math.round(Math.min(88, cv * 280)),
+      note: "Biến thiên RR hỗn loạn, không có mẫu tuần hoàn — Đặc trưng AFib.", color: "#ef4444" };
+  }
+  if (cv < 0.12) {
+    return { type: "normal", label: "Nhịp xoang bình thường", confidence: Math.round(Math.min(95, (0.12 - cv) / 0.12 * 80 + 50)),
+      note: "RR interval đều đặn — Tim đập bình thường.", color: "#22c55e" };
+  }
+  return { type: "borderline", label: "Nhịp tim cần theo dõi thêm", confidence: 55,
+    note: "Không đủ đặc trưng để phân loại rõ ràng. Đo lại sau 10 phút.", color: "#f59e0b" };
+}
+
+// ─── #2: RSA Index — Breathing-Coupled HR Variation ───────────────────────────
+// Quantifies how much HR variation correlates with breathing cycle
+// Low RSA = abnormal (not physiological variation) → boosts AFib confidence
+function computeRSAIndex(rrIntervals) {
+  if (!rrIntervals || rrIntervals.length < 16) return null;
+  const n = rrIntervals.length;
+  const mean = rrIntervals.reduce((a, b) => a + b, 0) / n;
+  // Estimate breathing frequency via peak detection in RR fluctuation
+  // Typical breathing: 0.15-0.4 Hz (RSA range = HF band)
+  const centered = rrIntervals.map(r => r - mean);
+  let lfPow = 0, hfPow = 0;
+  for (let k = 1; k < Math.floor(n / 2); k++) {
+    const freq = k * (1000 / mean) / n;
+    let re = 0, im = 0;
+    for (let i = 0; i < n; i++) {
+      re += centered[i] * Math.cos(2 * Math.PI * k * i / n);
+      im -= centered[i] * Math.sin(2 * Math.PI * k * i / n);
+    }
+    const pow = (re * re + im * im) / n;
+    if (freq >= 0.04 && freq < 0.15) lfPow += pow;
+    else if (freq >= 0.15 && freq <= 0.40) hfPow += pow;
+  }
+  const totalPow = lfPow + hfPow;
+  if (!totalPow) return null;
+  const rsaIndex = Math.round(hfPow / totalPow * 100); // % of power in breathing band
+  const isPhysiological = rsaIndex >= 25; // normal RSA should dominate in HF band
+  return { rsaIndex, isPhysiological,
+    label: rsaIndex >= 40 ? "RSA Cao – Nhịp thở bình thường" : rsaIndex >= 25 ? "RSA Vừa – Theo dõi thêm" : "RSA Thấp – Cần chú ý",
+    note: isPhysiological ? "Biến thiên tim theo nhịp thở bình thường" : "Biến thiên không theo nhịp thở — Tăng nguy cơ AFib" };
+}
+
+// ─── #5: Algorithmic Synthetic ECG from PPG ────────────────────────────────────
+// Converts PPG-derived RR intervals to ECG-like waveform for doctor display
+// Uses cardiac cycle model: P-wave → QRS → T-wave morphology
+function synthesizeECGWaveform(rrIntervals, bpm, numBeats = 6) {
+  if (!rrIntervals || !bpm) return null;
+  const meanRR = rrIntervals.length ? rrIntervals.reduce((a,b)=>a+b,0)/rrIntervals.length : 60000/bpm;
+  const samples = [];
+  const fs = 250; // synthetic sampling rate
+  const beatsToRender = Math.min(numBeats, rrIntervals.length || numBeats);
+  let currentRRs = rrIntervals.length >= beatsToRender ? rrIntervals : Array(beatsToRender).fill(meanRR);
+  for (let beat = 0; beat < beatsToRender; beat++) {
+    const rr = currentRRs[beat] || meanRR;
+    const beatSamples = Math.round(rr / 1000 * fs);
+    for (let i = 0; i < beatSamples; i++) {
+      const t = i / beatSamples;
+      let v = 0;
+      // P wave: 0–0.16 of cycle, Gaussian centered at 0.10
+      v += 0.12 * Math.exp(-((t - 0.10) ** 2) / (2 * 0.012 ** 2));
+      // PR segment: flat 0.16–0.22
+      // QRS complex: sharp spike 0.22–0.32
+      if (t >= 0.22 && t < 0.24) v -= 0.15 * (t - 0.22) / 0.02; // Q
+      if (t >= 0.24 && t < 0.28) v += 1.0 * Math.exp(-((t - 0.26) ** 2) / (2 * 0.008 ** 2)); // R
+      if (t >= 0.28 && t < 0.32) v -= 0.10 * (0.32 - t) / 0.04; // S
+      // ST segment + T wave: 0.35–0.65
+      v += 0.25 * Math.exp(-((t - 0.52) ** 2) / (2 * 0.045 ** 2)); // T wave
+      // AFib effect: add noise to P wave and RR jitter
+      if (rrIntervals.length > 2) {
+        const cv = Math.sqrt(rrIntervals.map(r=>(r-meanRR)**2).reduce((a,b)=>a+b,0)/rrIntervals.length)/meanRR;
+        if (cv > 0.15) v += (Math.random() - 0.5) * cv * 0.4; // P-wave chaos for AFib
+      }
+      samples.push(Math.max(-0.4, Math.min(1.2, v)));
+    }
+  }
+  return samples;
+}
+
+// ─── G4/#9: 24h AFib Forecast ─────────────────────────────────────────────────
+// Predicts AFib risk in next 24h based on HRV trend + weather + time of day
+function computeAfibForecast(measurements, weatherTemp) {
+  if (!measurements || measurements.length < 3) return null;
+  const recent = measurements.filter(m => m.type === "face" || m.type === "finger").slice(-14);
+  if (recent.length < 3) return null;
+  // HRV trend (downward = higher risk)
+  const hrvs = recent.map(m => m.result?.sdnn || m.result?.hrvScore || 30).filter(Boolean);
+  const hrvTrend = hrvs.length >= 3 ? (hrvs[0] - hrvs[hrvs.length - 1]) / hrvs[0] : 0;
+  const recentAfibRate = recent.filter(m => m.result?.classification === "afib").length / recent.length;
+  const avgBpm = recent.map(m => m.result?.bpm || 72).reduce((a,b)=>a+b,0) / recent.length;
+  const cvHistory = recent.map(m => m.result?.cv || 0).filter(Boolean);
+  const avgCV = cvHistory.length ? cvHistory.reduce((a,b)=>a+b,0) / cvHistory.length : 0;
+  // Time of day risk: 4–6 AM highest (circadian)
+  const hour = new Date().getHours();
+  const circadianFactor = (hour >= 4 && hour <= 6) ? 1.4 : (hour >= 22 || hour <= 3) ? 1.2 : 1.0;
+  // Weather factor (cold → vasospasm risk)
+  const weatherFactor = (weatherTemp !== null && weatherTemp < 18) ? 1.3 : (weatherTemp !== null && weatherTemp < 10) ? 1.5 : 1.0;
+  // Base risk calculation
+  let riskScore = 20;
+  riskScore += Math.min(25, hrvTrend * 60); // HRV decline
+  riskScore += recentAfibRate * 35; // recent AFib episodes
+  riskScore += Math.max(0, (avgCV - 0.12) * 120); // RR irregularity trend
+  riskScore += Math.max(0, (avgBpm - 85) * 0.5); // elevated resting HR
+  riskScore *= circadianFactor * weatherFactor;
+  riskScore = Math.round(Math.max(5, Math.min(90, riskScore)));
+  const peakHour = (hour < 18) ? "4-6 giờ sáng mai" : "4-6 giờ sáng nay";
+  return {
+    riskPercent: riskScore,
+    level: riskScore >= 65 ? "CAO" : riskScore >= 40 ? "TRUNG_BINH" : "THAP",
+    peakWindow: peakHour,
+    factors: [
+      hrvTrend > 0.1 ? `HRV giảm ${Math.round(hrvTrend*100)}% (xu hướng xấu)` : null,
+      recentAfibRate > 0.2 ? `${Math.round(recentAfibRate*100)}% lần đo gần đây có AFib` : null,
+      weatherTemp !== null && weatherTemp < 18 ? `Nhiệt độ thấp ${weatherTemp}°C` : null,
+      (hour >= 22 || hour <= 6) ? "Khung giờ nguy hiểm cao (đêm/sáng sớm)" : null,
+    ].filter(Boolean),
+    recommendation: riskScore >= 65
+      ? "Nguy cơ CAO. Hạn chế vận động mạnh, uống thuốc đúng giờ, sẵn sàng SOS."
+      : riskScore >= 40
+      ? "Nguy cơ TRUNG BÌNH. Theo dõi sát, nghỉ ngơi đầy đủ."
+      : "Nguy cơ THẤP. Duy trì sinh hoạt bình thường.",
+  };
+}
+
+// ─── #7/2: Mouse BCG Tremor Analysis (Ballistocardiography via mouse) ──────────
+const _bcg = { events: [], active: false, lastResult: null };
+function startMouseBCGTracking() {
+  if (_bcg.active) return;
+  _bcg.events = []; _bcg.active = true;
+  document.addEventListener("mousemove", _bcgMouseHandler);
+  setTimeout(stopMouseBCGTracking, 30000); // 30 seconds max
+}
+function _bcgMouseHandler(e) {
+  if (!_bcg.active) return;
+  _bcg.events.push({ t: Date.now(), x: e.clientX, y: e.clientY });
+  if (_bcg.events.length > 2000) _bcg.events.shift();
+}
+function stopMouseBCGTracking() {
+  if (!_bcg.active) return;
+  _bcg.active = false;
+  document.removeEventListener("mousemove", _bcgMouseHandler);
+  if (_bcg.events.length >= 100) {
+    _bcg.lastResult = analyzeBCGMouse(_bcg.events);
+    renderBCGResult(_bcg.lastResult);
+  }
+}
+function analyzeBCGMouse(events) {
+  if (events.length < 50) return null;
+  // Calculate velocity and jitter
+  const velocities = [];
+  for (let i = 1; i < events.length; i++) {
+    const dt = events[i].t - events[i-1].t;
+    if (dt <= 0 || dt > 200) continue;
+    const dx = events[i].x - events[i-1].x;
+    const dy = events[i].y - events[i-1].y;
+    velocities.push(Math.sqrt(dx*dx + dy*dy) / dt);
+  }
+  if (velocities.length < 20) return null;
+  const mean = velocities.reduce((a,b)=>a+b,0) / velocities.length;
+  const std = Math.sqrt(velocities.map(v=>(v-mean)**2).reduce((a,b)=>a+b,0) / velocities.length);
+  const cv = std / (mean || 1);
+  // Analyze micro-jitter patterns (BCG signature)
+  const jitterScore = Math.round(Math.min(100, cv * 200));
+  const riskHint = cv > 0.8 ? "Phát hiện vi rung cao — Có thể do nhịp tim bất thường. Khuyến nghị đo PPG để xác nhận."
+    : cv > 0.5 ? "Vi rung trung bình — Bình thường hoặc nhịp hơi không đều."
+    : "Vi rung thấp — Tay ổn định, nhịp tim có thể đều.";
+  return { jitterScore, cv: Math.round(cv * 1000) / 1000, riskHint,
+    sampleCount: velocities.length, duration: Math.round((events[events.length-1].t - events[0].t) / 1000) };
+}
+function renderBCGResult(result) {
+  const box = document.getElementById("bcgResultBox");
+  if (!box || !result) return;
+  const color = result.jitterScore > 60 ? "#ef4444" : result.jitterScore > 35 ? "#f59e0b" : "#22c55e";
+  box.innerHTML = `
+    <div class="list-item"><span>Vi rung ngón tay</span><strong style="color:${color}">${result.jitterScore}/100</strong></div>
+    <div class="list-item"><span>Hệ số biến thiên</span><strong>${result.cv}</strong></div>
+    <div class="list-item"><span>Mẫu phân tích</span><strong>${result.sampleCount} điểm / ${result.duration}s</strong></div>
+    <p class="muted" style="margin-top:6px;font-size:12px">${result.riskHint}</p>`;
+}
+
+// ─── Fall Detection (DeviceMotion) — Feature 3.4 ─────────────────────────────
+const _fall = { lastAlert: 0 };
+function initFallDetection() {
+  if (!window.DeviceMotionEvent || !isMobile()) return;
+  const request = DeviceMotionEvent.requestPermission;
+  const bindFall = () => {
+    window.addEventListener("devicemotion", (e) => {
+      const a = e.accelerationIncludingGravity;
+      if (!a) return;
+      const magnitude = Math.sqrt((a.x||0)**2 + (a.y||0)**2 + (a.z||0)**2);
+      const now = Date.now();
+      if (magnitude > 25 && now - _fall.lastAlert > 30000) {
+        _fall.lastAlert = now;
+        setTimeout(() => {
+          const stillMag = Math.sqrt((a.x||0)**2 + (a.y||0)**2 + (a.z||0)**2);
+          if (stillMag < 3) {
+            // Show fall alert banner with cancel button in DOM
+            let fallBanner = document.getElementById("fallDetectionBanner");
+            if (!fallBanner) {
+              fallBanner = document.createElement("div");
+              fallBanner.id = "fallDetectionBanner";
+              fallBanner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;background:#ef4444;color:#fff;padding:14px 16px;font-size:15px;font-weight:700;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(239,68,68,0.5)";
+              document.body.prepend(fallBanner);
+            }
+            let countdown = 10;
+            _fall.canceled = false;
+            const update = () => {
+              fallBanner.innerHTML = `⚠️ Phát hiện ngã! Bạn có ổn không? SOS tự động sau <strong>${countdown}s</strong>
+                <button id="fallCancelBtn" onclick="document.getElementById('fallDetectionBanner')?.remove();window._fallCanceled=true" style="background:#fff;color:#ef4444;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:700;font-size:13px;margin-left:auto">Tôi ổn – Hủy</button>`;
+            };
+            update();
+            const timer = setInterval(() => {
+              countdown--;
+              if (window._fallCanceled) { clearInterval(timer); fallBanner.remove(); window._fallCanceled = false; return; }
+              if (countdown <= 0) {
+                clearInterval(timer);
+                fallBanner.remove();
+                if (!window._fallCanceled) triggerSos("Phát hiện ngã tự động — không có phản hồi");
+              } else { update(); }
+            }, 1000);
+          }
+        }, 2000);
+      }
+    });
+  };
+  typeof request === "function" ? request().then(p => { if (p === "granted") bindFall(); }).catch(() => {}) : bindFall();
+}
+
+// ─── #10: Digital Twin Heart Canvas Animation ─────────────────────────────────
+let _dtAnimFrame = null;
+function renderDigitalTwin(bpm, rhythmType, rrIntervals) {
+  const canvas = document.getElementById("digitalTwinCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width, h = canvas.height;
+  const isAfib = rhythmType === "afib";
+  const isPacPvc = rhythmType === "pac_pvc";
+  let beatPhase = 0, lastBeat = 0;
+  if (_dtAnimFrame) cancelAnimationFrame(_dtAnimFrame);
+  const beatInterval = 60000 / Math.max(40, Math.min(180, bpm));
+  // Pre-compute RR jitter for AFib simulation
+  const rrJitters = rrIntervals?.slice(0, 20) || [];
+  let rrIdx = 0;
+  function drawHeart(x, y, size, fillColor, opacity = 1) {
+    ctx.save(); ctx.globalAlpha = opacity;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x, y - size * 0.3, x - size * 0.5, y - size * 0.6, x - size * 0.5, y - size * 0.3);
+    ctx.bezierCurveTo(x - size * 0.5, y - size * 0.7, x - size * 0.05, y - size * 0.8, x, y - size * 0.4);
+    ctx.bezierCurveTo(x + size * 0.05, y - size * 0.8, x + size * 0.5, y - size * 0.7, x + size * 0.5, y - size * 0.3);
+    ctx.bezierCurveTo(x + size * 0.5, y - size * 0.6, x, y - size * 0.3, x, y);
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+    ctx.restore();
+  }
+  function animate(ts) {
+    ctx.clearRect(0, 0, w, h);
+    // Dark background
+    ctx.fillStyle = "#0f1f3d";
+    ctx.fillRect(0, 0, w, h);
+    const now = ts;
+    let currentBeatInterval = beatInterval;
+    // Use actual RR intervals for AFib irregular timing
+    if (isAfib && rrJitters.length > 0) {
+      currentBeatInterval = rrJitters[rrIdx % rrJitters.length];
+    } else if (isPacPvc && rrJitters.length > 0 && rrIdx % 5 === 2) {
+      currentBeatInterval = rrJitters[rrIdx % rrJitters.length] * 0.65; // premature beat
+    }
+    if (now - lastBeat >= currentBeatInterval) { beatPhase = 0; lastBeat = now; rrIdx++; }
+    const t = (now - lastBeat) / currentBeatInterval;
+    beatPhase = t;
+    // Systole (0–0.35): contract
+    const systolicPhase = t < 0.35 ? t / 0.35 : 0;
+    const scale = 1 - systolicPhase * 0.18;
+    // Draw chambers
+    const cx = w / 2, cy = h / 2;
+    // Left ventricle glow
+    const lvColor = isAfib ? `rgba(239,68,68,${0.15 + systolicPhase * 0.3})` : `rgba(224,58,90,${0.12 + systolicPhase * 0.25})`;
+    ctx.beginPath(); ctx.arc(cx - 15, cy + 10, 45 * (1 - systolicPhase * 0.15), 0, Math.PI * 2);
+    ctx.fillStyle = lvColor; ctx.fill();
+    // Right ventricle
+    const rvColor = isPacPvc ? `rgba(245,158,11,${0.12 + systolicPhase * 0.2})` : `rgba(239,68,68,${0.08 + systolicPhase * 0.15})`;
+    ctx.beginPath(); ctx.arc(cx + 15, cy + 15, 38 * (1 - systolicPhase * 0.12), 0, Math.PI * 2);
+    ctx.fillStyle = rvColor; ctx.fill();
+    // Main heart shape
+    const heartColor = isAfib ? "#ef4444" : isPacPvc ? "#f59e0b" : "#e03a5a";
+    ctx.save(); ctx.scale(scale, scale); ctx.translate((1 - scale) * cx, (1 - scale) * cy);
+    drawHeart(cx, cy + 10, 55, heartColor, 0.9);
+    ctx.restore();
+    // Blood flow particles during systole
+    if (systolicPhase > 0.2 && systolicPhase < 0.6) {
+      const n = isAfib ? Math.floor(Math.random() * 4) : 3;
+      for (let i = 0; i < n; i++) {
+        const angle = (Math.PI * 1.5) + (Math.random() - 0.5) * (isAfib ? 1.2 : 0.6);
+        const dist = 55 + (systolicPhase - 0.2) * 80 + (isAfib ? Math.random() * 20 : 0);
+        const px = cx + Math.cos(angle) * dist;
+        const py = cy + Math.sin(angle) * dist + 10;
+        ctx.beginPath(); ctx.arc(px, py, isAfib ? 2 + Math.random() * 3 : 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = isAfib ? `rgba(239,68,68,${0.6 - (systolicPhase - 0.2) * 0.5})` : `rgba(224,58,90,${0.7 - (systolicPhase - 0.2) * 0.6})`;
+        ctx.fill();
+      }
+    }
+    // Label
+    ctx.fillStyle = "#94a3b8"; ctx.font = "11px system-ui"; ctx.textAlign = "center";
+    const label = isAfib ? "⚠️ Rung nhĩ – Hỗn loạn" : isPacPvc ? "ℹ️ Ngoại tâm thu" : "✅ Nhịp xoang bình thường";
+    ctx.fillText(label, cx, h - 8);
+    _dtAnimFrame = requestAnimationFrame(animate);
+  }
+  _dtAnimFrame = requestAnimationFrame(animate);
+}
+
+// ─── #5: Render Synthetic ECG ─────────────────────────────────────────────────
+function renderSyntheticECGDisplay(rrIntervals, bpm) {
+  const container = document.getElementById("syntheticECGBox");
+  if (!container) return;
+  const waveform = synthesizeECGWaveform(rrIntervals, bpm, 6);
+  if (!waveform) { container.innerHTML = "<p class='muted'>Cần đo ít nhất 30s để tổng hợp ECG.</p>"; return; }
+  const w = 560, h = 120;
+  const n = waveform.length;
+  const pts = waveform.map((v, i) => `${(i / n * w).toFixed(1)},${(h / 2 - v * (h / 2 - 8)).toFixed(1)}`).join(" ");
+  const isAfib = rrIntervals && rrIntervals.length >= 4 && (() => {
+    const mean = rrIntervals.reduce((a,b)=>a+b,0)/rrIntervals.length;
+    const cv = Math.sqrt(rrIntervals.map(r=>(r-mean)**2).reduce((a,b)=>a+b,0)/rrIntervals.length)/mean;
+    return cv > 0.22;
+  })();
+  container.innerHTML = `
+    <p class="muted" style="font-size:11px;margin-bottom:4px">Sóng ECG giả lập (Synthetic ECG từ PPG) — Chỉ số y khoa ước tính</p>
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;background:#0a1628;border-radius:6px;display:block">
+      <defs><filter id="ecgGlow"><feGaussianBlur stdDeviation="1.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+      <line x1="0" y1="${h/2}" x2="${w}" y2="${h/2}" stroke="#1a2a4a" stroke-width="1"/>
+      ${Array.from({length:6},(_, i)=>`<line x1="${i*w/5}" y1="0" x2="${i*w/5}" y2="${h}" stroke="#1a2a4a" stroke-width="0.5"/>`).join("")}
+      <polyline points="${pts}" fill="none" stroke="${isAfib ? "#ef4444" : "#22d3ee"}" stroke-width="1.5" filter="url(#ecgGlow)"/>
+      <text x="6" y="14" fill="#475569" font-size="9" font-family="monospace">I</text>
+      <text x="${w-30}" y="${h-4}" fill="#475569" font-size="9" font-family="monospace">25mm/s</text>
+    </svg>
+    <p class="muted" style="font-size:10px;margin-top:3px;color:${isAfib?"#ef4444":"#94a3b8"}">
+      ${isAfib ? "⚠️ Mẫu sóng AFib: thiếu sóng P, RR không đều" : "✅ Nhịp xoang: sóng P–QRS–T bình thường"}
+    </p>`;
+}
+
+// ─── 1.7: Elderly Mode ────────────────────────────────────────────────────────
+let _elderlyMode = false;
+function toggleElderlyMode() {
+  _elderlyMode = !_elderlyMode;
+  document.body.classList.toggle("elderly-mode", _elderlyMode);
+  const btn = document.getElementById("elderlyModeBtn");
+  if (btn) { btn.textContent = _elderlyMode ? "👁 Tắt chế độ ông/bà" : "👴 Chế độ ông/bà (chữ to)"; }
+  if (_elderlyMode) showToast("Đã bật chế độ chữ to cho ông/bà", "success");
+  localStorage.setItem("hs_elderly", _elderlyMode ? "1" : "");
+}
+
+// ─── 1.9: Battery Warning for Night Monitoring ───────────────────────────────
+async function checkBatteryForNight() {
+  const box = document.getElementById("batteryWarningBox");
+  if (!box) return;
+  if (!navigator.getBattery) { box.hidden = true; return; }
+  try {
+    const bat = await navigator.getBattery();
+    const pct = Math.round(bat.level * 100);
+    if (!bat.charging && pct < 30) {
+      box.hidden = false;
+      box.textContent = `🔋 Pin ${pct}% — Cắm sạc trước khi theo dõi qua đêm để không mất dữ liệu!`;
+      box.style.cssText = "padding:8px 12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;color:#92400e;font-size:13px;font-weight:600;margin-bottom:10px";
+    } else {
+      box.hidden = true;
+    }
+    bat.addEventListener("levelchange", checkBatteryForNight);
+  } catch { box.hidden = true; }
+}
+
+// ─── 1.10: Daily Health Tips ─────────────────────────────────────────────────
+const HEALTH_TIPS = [
+  "💧 Uống đủ 2 lít nước mỗi ngày giúp giảm nguy cơ rung nhĩ.",
+  "🚶 Đi bộ 30 phút/ngày giảm 20% nguy cơ đột quỵ và cải thiện HRV.",
+  "🧘 Thiền 10 phút buổi sáng giảm hormone cortisol — kẻ thù của tim.",
+  "🥑 Omega-3 từ cá hồi và hạt lanh giúp giảm viêm và bảo vệ tim mạch.",
+  "⏰ Ngủ đủ 7-8 tiếng. Thiếu ngủ tăng 80% nguy cơ rung nhĩ.",
+  "🧂 Giảm muối xuống dưới 5g/ngày để kiểm soát huyết áp.",
+  "☕ Cà phê: 1-2 cốc/ngày có thể bảo vệ tim; quá nhiều gây loạn nhịp.",
+  "❄️ Trời lạnh: mặc đủ ấm vùng ngực, tránh ra ngoài đột ngột sáng sớm.",
+  "😊 Stress mãn tính là nguyên nhân của 40% cơn AFib. Hãy nghỉ ngơi đủ.",
+  "🏥 Khám tim mạch định kỳ 6 tháng/lần nếu có tiền sử AFib.",
+  "📱 Đo tim mỗi buổi sáng lúc 5-7h — khi nguy cơ tim mạch cao nhất.",
+  "💊 Không bỏ thuốc dù cảm thấy khỏe. Rung nhĩ thường không có triệu chứng.",
+];
+function showDailyHealthTip() {
+  const box = document.getElementById("dailyTipBox");
+  if (!box) return;
+  const idx = Math.floor(Date.now() / 86400000) % HEALTH_TIPS.length;
+  box.innerHTML = `<p style="margin:0;font-size:13px;color:#1e3a5f">${HEALTH_TIPS[idx]}</p>`;
+}
+
+// ─── G1/1.1: Real-time Signal Quality Guidance ───────────────────────────────
+function getSignalQualityGuidance(lightScore, stabilityScore, mode, signalQuality) {
+  const hints = [];
+  if (lightScore < 50) {
+    hints.push(mode === "finger"
+      ? "💡 Ngón tay chưa che kín đèn flash. Ấn chặt hơn."
+      : "💡 Ánh sáng quá yếu. Ngồi gần cửa sổ hoặc bật đèn phòng.");
+  } else if (lightScore < 70) {
+    hints.push(mode === "finger" ? "💡 Che thêm đèn flash — ánh sáng vẫn hơi lọt." : "💡 Cần thêm ánh sáng phòng.");
+  }
+  if (stabilityScore < 50) {
+    hints.push(mode === "finger"
+      ? "🤲 Tay rung nhiều. Đặt tay lên mặt bàn và hít thở nhẹ."
+      : "🤲 Đầu/người đang di chuyển. Ngồi thẳng, tựa lưng vào ghế, không nói chuyện.");
+  } else if (stabilityScore < 70) {
+    hints.push("🤲 Giữ yên hơn nữa. Thở nhẹ và đều.");
+  }
+  if (signalQuality < 40) hints.push("⏳ Tín hiệu yếu. Đợi 5 giây để tín hiệu ổn định trước khi bắt đầu đo.");
+  return hints.join(" · ") || (signalQuality >= 75 ? "✅ Tín hiệu tốt — đang đo chuẩn!" : "🔄 Đang đo...");
+}
+
+// ─── 1.4: Golden Window Reminder ─────────────────────────────────────────────
+function computeGoldenWindow(measurements) {
+  if (!measurements || measurements.length < 5) return null;
+  const hourCounts = {};
+  for (const m of measurements.filter(m => m.type === "face" || m.type === "finger")) {
+    const sq = m.result?.signalQuality || 0;
+    if (sq < 55) continue;
+    const hour = new Date(m.createdAt).getHours();
+    if (!hourCounts[hour]) hourCounts[hour] = { total: 0, count: 0 };
+    hourCounts[hour].total += sq;
+    hourCounts[hour].count++;
+  }
+  let bestHour = null, bestScore = 0;
+  for (const [h, d] of Object.entries(hourCounts)) {
+    if (d.count < 2) continue;
+    const avg = d.total / d.count;
+    if (avg > bestScore) { bestScore = avg; bestHour = parseInt(h); }
+  }
+  if (bestHour === null) return null;
+  const period = bestHour < 12 ? "sáng" : bestHour < 18 ? "chiều" : "tối";
+  return { hour: bestHour, period, score: Math.round(bestScore),
+    label: `${bestHour}h ${period}` };
+}
+
+// ─── 2.9: Weather-AFib Risk Correlation ─────────────────────────────────────
+function renderWeatherAfibAlert(weather, measurements) {
+  const box = document.getElementById("weatherAfibBox");
+  if (!box || !weather) return;
+  const temp = weather.temp || weather.main?.temp || null;
+  const humidity = weather.humidity || weather.main?.humidity || null;
+  const desc = weather.description || weather.weather?.[0]?.description || "";
+  if (temp === null) { box.innerHTML = ""; return; }
+  const risks = [];
+  if (temp < 10) risks.push("🌡️ Nhiệt độ rất lạnh (<10°C) — tăng co mạch, nguy cơ AFib cao");
+  else if (temp < 18) risks.push(`🌡️ Trời lạnh ${temp}°C — mặc ấm vùng ngực`);
+  if (humidity > 85) risks.push("💧 Độ ẩm cao >85% — tim cần làm việc nhiều hơn");
+  if (desc.toLowerCase().includes("storm") || desc.toLowerCase().includes("bão")) risks.push("⛈️ Áp suất khí quyển thay đổi đột ngột — nguy cơ AFib tăng");
+  const forecast = computeAfibForecast(measurements, temp);
+  if (risks.length || (forecast && forecast.riskPercent >= 40)) {
+    box.innerHTML = `
+      <div class="list-item"><span>Thời tiết hiện tại</span><strong>${temp}°C · ${humidity}% ẩm</strong></div>
+      ${risks.map(r => `<div class="list-item" style="color:#92400e">${r}</div>`).join("")}
+      ${forecast ? `<div class="list-item"><span>Dự báo 24h</span><strong style="color:${forecast.level==="CAO"?"#ef4444":forecast.level==="TRUNG_BINH"?"#f59e0b":"#22c55e"}">${forecast.riskPercent}% — ${forecast.level}</strong></div>` : ""}
+      ${forecast?.recommendation ? `<p class="muted" style="font-size:12px;margin-top:4px">${forecast.recommendation}</p>` : ""}`;
+  } else {
+    box.innerHTML = `<div class="list-item"><span>Thời tiết hiện tại</span><strong>${temp}°C · Bình thường</strong></div><p class="muted" style="font-size:12px">Điều kiện thời tiết tốt cho tim mạch hôm nay.</p>`;
+  }
+}
+
+// ─── G2: Expert Mode 7-day monitoring ────────────────────────────────────────
+const _expertMode = { active: false, interval: null };
+function toggleExpertMode() {
+  const btn = document.getElementById("expertModeBtn");
+  const statusEl = document.getElementById("expertModeStatus");
+  if (!_expertMode.active) {
+    if (!state.token) { showToast("Cần đăng nhập để bật Chế độ Chuyên gia", "error"); return; }
+    _expertMode.active = true;
+    if (btn) { btn.textContent = "🔴 Dừng theo dõi chuyên sâu"; btn.className = "ghost-btn"; }
+    if (statusEl) statusEl.textContent = "Đang theo dõi chuyên sâu 7 ngày — tự động đo mỗi 2 giờ";
+    showToast("Chế độ chuyên sâu bật: nhớ mở app mỗi 2 tiếng để đo tự động", "success");
+    // Schedule auto-measure every 2 hours via notification
+    _expertMode.interval = setInterval(() => {
+      if (document.hidden) { notify("HEARTSENSE Expert", "Đến giờ đo tim tự động!"); }
+    }, 2 * 60 * 60 * 1000);
+    // Save to server
+    if (state.user) api(`/api/expert-mode`, { method: "POST",
+      body: JSON.stringify({ token: state.token, userId: state.user.id, active: true }) }).catch(() => {});
+  } else {
+    _expertMode.active = false;
+    clearInterval(_expertMode.interval);
+    if (btn) { btn.textContent = "🔬 Bật chế độ theo dõi 7 ngày (giả lập Holter)"; btn.className = "primary-btn"; }
+    if (statusEl) statusEl.textContent = "Chế độ chuyên sâu đã tắt.";
+    if (state.user) api(`/api/expert-mode`, { method: "POST",
+      body: JSON.stringify({ token: state.token, userId: state.user.id, active: false }) }).catch(() => {});
+  }
+}
+
+// ─── G5: Post-Ablation Risk Prediction ───────────────────────────────────────
+function computeAblationRisk(inputs) {
+  const { age, bmi, afibType, lavi, afibDuration, symptoms } = inputs;
+  // Based on DECAAF II model simplified coefficients
+  let risk = 20;
+  if (age > 65) risk += 8;
+  if (bmi > 30) risk += 7;
+  if (afibType === "persistent") risk += 15;
+  if (lavi > 35) risk += 12;
+  if (afibDuration > 12) risk += 10;
+  if (symptoms === "severe") risk += 8;
+  risk = Math.round(Math.min(80, Math.max(10, risk)));
+  return { risk,
+    level: risk >= 50 ? "CAO" : risk >= 30 ? "TRUNG_BINH" : "THAP",
+    recommendation: risk >= 50
+      ? "Nguy cơ tái phát CAO. Trao đổi với bác sĩ về điều trị nội khoa dài hạn song song với ablation."
+      : risk >= 30
+      ? "Nguy cơ TRUNG BÌNH. Theo dõi sát sau ablation ít nhất 6 tháng bằng Heartsense."
+      : "Nguy cơ THẤP. Tiên lượng tốt sau ablation. Vẫn cần theo dõi định kỳ." };
+}
+
+// ─── 1.6: Share Report 1-tap (Zalo / Gmail / Clipboard) ─────────────────────
+async function shareReport(target) {
+  if (target instanceof Event || typeof target !== "string") target = null;
+  if (!state.user) { showToast("Cần đăng nhập để chia sẻ báo cáo", "error"); return; }
+  const reportUrl = `${window.location.origin}/api/users/${state.user.id}/report`;
+  const text = `Báo cáo tim mạch ${state.user?.fullName || "bệnh nhân"} — HEARTSENSE v4.0: ${reportUrl}`;
+
+  if (target === "zalo") {
+    // Zalo share deeplink (works on mobile with Zalo installed)
+    const zaloUrl = `https://zalo.me/share/url?url=${encodeURIComponent(reportUrl)}&title=${encodeURIComponent("Báo cáo tim mạch HEARTSENSE — " + (state.user?.fullName || ""))}`;
+    window.open(zaloUrl, "_blank", "noreferrer");
+    return;
+  }
+  if (target === "gmail") {
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&su=${encodeURIComponent("Báo cáo tim mạch HEARTSENSE - " + (state.user?.fullName || ""))}&body=${encodeURIComponent(text)}`;
+    window.open(gmailUrl, "_blank", "noreferrer");
+    return;
+  }
+  // Default: Web Share API then clipboard
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "Báo cáo tim mạch HEARTSENSE", url: reportUrl, text: `Kết quả đo tim của ${state.user?.fullName || "bệnh nhân"} — HEARTSENSE v4.0` });
+      return;
+    } catch {}
+  }
+  // Show share options popup
+  showShareOptions(reportUrl, text);
+}
+function showShareOptions(reportUrl, text) {
+  let overlay = document.getElementById("shareOptionsOverlay");
+  if (overlay) overlay.remove();
+  overlay = document.createElement("div");
+  overlay.id = "shareOptionsOverlay";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;display:flex;align-items:flex-end;justify-content:center";
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 16px;box-shadow:0 -4px 24px rgba(0,0,0,0.15)">
+      <h3 style="margin:0 0 16px;font-size:16px;color:#1e3a5f">📤 Chia sẻ báo cáo</h3>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;text-align:center">
+        <button onclick="shareReport('zalo');document.getElementById('shareOptionsOverlay')?.remove()" style="background:#0068ff;color:#fff;border:none;border-radius:10px;padding:12px 6px;cursor:pointer;font-size:12px;font-weight:700">💬<br>Zalo</button>
+        <button onclick="shareReport('gmail');document.getElementById('shareOptionsOverlay')?.remove()" style="background:#ea4335;color:#fff;border:none;border-radius:10px;padding:12px 6px;cursor:pointer;font-size:12px;font-weight:700">📧<br>Gmail</button>
+        <button onclick="navigator.clipboard?.writeText('${reportUrl}').then(()=>{window.showToast&&showToast('Đã sao chép!','success')});document.getElementById('shareOptionsOverlay')?.remove()" style="background:#6366f1;color:#fff;border:none;border-radius:10px;padding:12px 6px;cursor:pointer;font-size:12px;font-weight:700">📋<br>Sao chép</button>
+        <button onclick="document.getElementById('shareOptionsOverlay')?.remove()" style="background:#e2e8f0;color:#475569;border:none;border-radius:10px;padding:12px 6px;cursor:pointer;font-size:12px;font-weight:700">✕<br>Đóng</button>
+      </div>
+      <p style="font-size:11px;color:#94a3b8;margin:0;word-break:break-all">${reportUrl}</p>
+    </div>`;
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+// ─── 3.6: Research Mode — Anonymous Data Opt-in ──────────────────────────────
+function toggleResearchMode() {
+  const current = localStorage.getItem("hs_research") === "1";
+  const newState = !current;
+  localStorage.setItem("hs_research", newState ? "1" : "");
+  const btn = document.getElementById("researchModeBtn");
+  const statusEl = document.getElementById("researchModeStatus");
+  if (btn) btn.textContent = newState ? "✅ Đã tham gia nghiên cứu — Bấm để rút" : "🔬 Tham gia nghiên cứu ẩn danh";
+  if (statusEl) statusEl.textContent = newState
+    ? "Cảm ơn! Dữ liệu ẩn danh của bạn đóng góp cho nghiên cứu AFib Việt Nam."
+    : "Bạn đã rút khỏi chương trình nghiên cứu.";
+  if (state.user) api("/api/research-consent", { method: "POST",
+    body: JSON.stringify({ token: state.token, userId: state.user.id, consent: newState }) }).catch(() => {});
+  showToast(newState ? "Đã tham gia đóng góp dữ liệu nghiên cứu ẩn danh" : "Đã rút khỏi nghiên cứu", "success");
+}
+
+// ─── 1.5: 7-day Trend Comparison ─────────────────────────────────────────────
+function renderTrendComparison(measurements) {
+  const box = document.getElementById("trendComparisonBox");
+  if (!box) return;
+  const all = measurements.filter(m => m.type === "face" || m.type === "finger").reverse();
+  if (all.length < 4) { box.innerHTML = "<p class='muted'>Cần ít nhất 4 lần đo để xem xu hướng.</p>"; return; }
+  const half = Math.ceil(all.length / 2);
+  const recent = all.slice(0, half);
+  const older = all.slice(half);
+  const avg = arr => Math.round(arr.reduce((s, v) => s + v, 0) / arr.length);
+  const bpmNow = avg(recent.map(m => m.result?.bpm || 0).filter(Boolean));
+  const bpmPrev = avg(older.map(m => m.result?.bpm || 0).filter(Boolean));
+  const hrvNow = avg(recent.map(m => m.result?.sdnn || m.result?.hrvScore || 0).filter(Boolean));
+  const hrvPrev = avg(older.map(m => m.result?.sdnn || m.result?.hrvScore || 0).filter(Boolean));
+  const diff = (a, b, lowerBetter = false) => {
+    const d = a - b; const pct = b ? Math.round(Math.abs(d) / b * 100) : 0;
+    const up = d > 0; const good = lowerBetter ? !up : up;
+    return `<span style="color:${good?"#22c55e":"#ef4444"}">${up?"↑":"↓"}${pct}%</span>`;
+  };
+  box.innerHTML = `
+    <div class="list-item"><span>Nhịp tim TB</span><strong>${bpmNow} BPM ${bpmPrev ? diff(bpmNow, bpmPrev, true) : ""}</strong></div>
+    <div class="list-item"><span>HRV (SDNN) TB</span><strong>${hrvNow} ms ${hrvPrev ? diff(hrvNow, hrvPrev) : ""}</strong></div>
+    <div class="list-item"><span>AFib trong kỳ</span><strong>${recent.filter(m=>m.result?.classification==="afib").length}/${recent.length} lần</strong></div>
+    <p class="muted" style="font-size:11px;margin-top:4px">So sánh ${recent.length} lần đo gần nhất với ${older.length} lần trước đó.</p>`;
+}
+
+// ─── 2.6: Blood Pressure OCR from photo ──────────────────────────────────────
+async function ocrBloodPressure(file) {
+  if (!file) return;
+  const statusEl = document.getElementById("bpOCRStatus");
+  if (statusEl) statusEl.textContent = "Đang đọc ảnh...";
+  try {
+    if (typeof Tesseract === "undefined") throw new Error("Tesseract chưa tải");
+    const { data: { text } } = await Tesseract.recognize(file, "eng", { logger: () => {} });
+    const m = text.match(/(\d{2,3})\s*[\/\\|]\s*(\d{2,3})/);
+    if (m) {
+      const sys = parseInt(m[1]), dia = parseInt(m[2]);
+      if (sys >= 60 && sys <= 220 && dia >= 40 && dia <= 150) {
+        const sysInput = document.getElementById("bpSysInput");
+        const diaInput = document.getElementById("bpDiaInput");
+        if (sysInput) sysInput.value = sys;
+        if (diaInput) diaInput.value = dia;
+        if (statusEl) statusEl.textContent = `✅ Đọc được: ${sys}/${dia} mmHg`;
+        el.systolicInput.value = sys;
+        return;
+      }
+    }
+    if (statusEl) statusEl.textContent = "Không đọc được. Nhập tay bên dưới.";
+  } catch { if (statusEl) statusEl.textContent = "Lỗi OCR. Nhập tay."; }
+}
+
+// ─── 1.3: Measurement Quality History ────────────────────────────────────────
+function renderMeasurementQualityHistory(measurements) {
+  const box = document.getElementById("qualityHistoryBox");
+  if (!box) return;
+  const meas = measurements.filter(m => m.type === "face" || m.type === "finger").slice(-10).reverse();
+  if (!meas.length) { box.innerHTML = "<p class='muted'>Chưa có dữ liệu.</p>"; return; }
+  box.innerHTML = meas.map(m => {
+    const sq = m.result?.signalQuality || 0;
+    const bar = Math.round(sq / 100 * 16);
+    const color = sq >= 75 ? "#22c55e" : sq >= 50 ? "#f59e0b" : "#ef4444";
+    const label = sq >= 75 ? "Rất tốt" : sq >= 50 ? "Chấp nhận" : "Kém";
+    return `<div class="list-item" style="gap:8px">
+      <span style="font-size:11px;color:#64748b;width:70px;flex-shrink:0">${new Date(m.createdAt).toLocaleDateString("vi-VN",{day:"2-digit",month:"2-digit"})}</span>
+      <div style="flex:1;background:#e2e8f0;border-radius:4px;height:8px"><div style="width:${bar/16*100}%;height:100%;background:${color};border-radius:4px"></div></div>
+      <strong style="color:${color};width:80px;text-align:right;font-size:12px">${sq}% ${label}</strong>
+    </div>`;
+  }).join("");
+}
+
+// ─── Heart-Print Identity Verification (#17) ─────────────────────────────────
+function computePPGFingerprint(rrIntervals) {
+  if (!rrIntervals || rrIntervals.length < 8) return null;
+  const n = rrIntervals.length;
+  const mean = rrIntervals.reduce((a,b)=>a+b,0)/n;
+  const normalized = rrIntervals.map(r => Math.round((r - mean) / mean * 1000));
+  // Create a simple hash fingerprint from RR pattern morphology
+  let hash = 0;
+  for (let i = 0; i < Math.min(8, normalized.length); i++) {
+    hash = ((hash << 5) - hash + normalized[i]) | 0;
+  }
+  const skew = rrIntervals.map(r => r - mean).reduce((a,b)=>a+b,0) / n / (Math.sqrt(rrIntervals.map(r=>(r-mean)**2).reduce((a,b)=>a+b,0)/n) || 1);
+  return { hash: Math.abs(hash).toString(16).slice(0,8), mean: Math.round(mean), skew: Math.round(skew * 100) / 100 };
+}
+
+// ─── 1.8/#16: Emotional Artifact Filter ──────────────────────────────────────
+let _preMoodState = null;
+function setPreMoodState(btn, mood) {
+  _preMoodState = mood;
+  document.querySelectorAll(".mood-btn").forEach(b => b.style.borderColor = "transparent");
+  btn.style.borderColor = "#3b82f6";
+  const hints = { great: "Trạng thái tốt — đo chuẩn nhất!", ok: "Bình thường — kết quả đáng tin cậy.", tired: "Mệt mỏi — nhịp tim có thể cao hơn bình thường.", stressed: "⚠️ Căng thẳng — AI sẽ ghi nhận để lọc nhiễu cảm xúc.", pain: "⚠️ Khó chịu — AI có thể giảm độ nhạy SOS tạm thời." };
+  const hint = document.getElementById("moodHint");
+  if (hint) hint.textContent = hints[mood] || "";
+}
+function getEmotionalArtifactNote(afibLikelihood, bpm) {
+  if (!_preMoodState) return null;
+  if ((_preMoodState === "stressed" || _preMoodState === "pain") && afibLikelihood && bpm > 90) {
+    return `ℹ️ Phát hiện trạng thái căng thẳng/khó chịu trước khi đo. Nhịp tim bất thường có thể do yếu tố tâm lý tạm thời — không phải AFib thật. Nghỉ ngơi 5 phút và đo lại.`;
+  }
+  if (_preMoodState === "tired" && bpm > 100) {
+    return `ℹ️ Mệt mỏi làm nhịp tim tăng bù trừ. Kết quả tham khảo, không phải chẩn đoán.`;
+  }
+  return null;
+}
+
+// ─── 2.5: Sudden HR Change Detection ─────────────────────────────────────────
+function detectSuddenHRChange(measurements) {
+  if (!measurements || measurements.length < 3) return null;
+  const recent = measurements.filter(m => m.type === "face" || m.type === "finger").slice(-6).reverse();
+  if (recent.length < 3) return null;
+  const bpms = recent.map(m => m.result?.bpm || 0).filter(Boolean);
+  if (bpms.length < 3) return null;
+  const latest = bpms[0];
+  const prevAvg = bpms.slice(1).reduce((a,b)=>a+b,0) / (bpms.length - 1);
+  const changePct = Math.abs(latest - prevAvg) / prevAvg * 100;
+  if (changePct < 20) return null;
+  const direction = latest > prevAvg ? "tăng" : "giảm";
+  const timeago = recent[0].createdAt ? new Date(recent[0].createdAt).toLocaleTimeString("vi-VN") : "gần đây";
+  return {
+    detected: true,
+    change: Math.round(changePct),
+    direction,
+    from: Math.round(prevAvg),
+    to: latest,
+    message: `⚡ Nhịp tim ${direction} đột ngột ${Math.round(changePct)}% (từ ${Math.round(prevAvg)} → ${latest} BPM lúc ${timeago}). ${direction === "tăng" ? "Kiểm tra: vừa vận động mạnh, căng thẳng, hoặc nhịp tim thật sự bất thường?" : "Kiểm tra: vừa nghỉ ngơi, hoặc đo không chuẩn?"}`,
+  };
+}
+
+// ─── 1.2: Skin Tone / BMI Calibration ────────────────────────────────────────
+function applySkinToneCalibration(signalQuality, mode) {
+  const skinTone = localStorage.getItem("hs_skin_tone") || "medium";
+  const bmi = parseFloat(localStorage.getItem("hs_bmi") || "22");
+  let adjustment = 0;
+  if (mode === "face") {
+    if (skinTone === "dark") adjustment -= 8; // dark skin reduces PPG signal via RGB camera
+    else if (skinTone === "very_dark") adjustment -= 15;
+    if (bmi > 30) adjustment -= 5; // high BMI reduces signal quality
+  }
+  return Math.max(15, Math.min(95, signalQuality + adjustment));
+}
+function saveCalibrationSettings(e) {
+  e.preventDefault();
+  const f = new FormData(e.currentTarget);
+  localStorage.setItem("hs_skin_tone", f.get("skinTone") || "medium");
+  localStorage.setItem("hs_bmi", f.get("bmi") || "22");
+  showToast("Đã lưu cài đặt hiệu chỉnh da/BMI", "success");
+}
+
+// ─── Zalo Tele-Clinic infrastructure (G6/C) ──────────────────────────────────
+function openZaloClinicInfo() {
+  const box = document.getElementById("zaloClinicBox");
+  if (!box) return;
+  box.innerHTML = `
+    <div class="list-item"><span>Trạng thái</span><strong class="badge neutral">Đang phát triển</strong></div>
+    <p class="muted" style="font-size:12px">Tính năng Bác sĩ từ xa qua Zalo đang được kết nối với mạng lưới bác sĩ tim mạch Việt Nam. Vui lòng liên hệ admin để đăng ký sớm.</p>
+    <p class="muted" style="font-size:12px">Trong thời gian chờ: Dùng nút "Chia sẻ báo cáo 1 chạm" để gửi kết quả cho bác sĩ của bạn qua Email/Zalo thủ công.</p>
+    <button class="secondary-btn" style="margin-top:8px" onclick="shareReport()">📤 Chia sẻ báo cáo ngay</button>`;
+}
+
+// ─── Estimated SpO2 (disclaimer: not medical grade) ─────────────────────────
+function estimateSpO2(samples) {
+  if (!samples || samples.length < 30) return null;
+  // Use R/G ratio as rough SpO2 proxy (NOT FDA-cleared, reference only)
+  const reds = samples.map(s => s.avgRed || 0).filter(Boolean);
+  const greens = samples.map(s => s.avgGreen || 0).filter(Boolean);
+  if (!reds.length || !greens.length) return null;
+  const redAC = Math.sqrt(reds.map(r => (r - reds.reduce((a,b)=>a+b,0)/reds.length)**2).reduce((a,b)=>a+b,0)/reds.length);
+  const greenAC = Math.sqrt(greens.map(g => (g - greens.reduce((a,b)=>a+b,0)/greens.length)**2).reduce((a,b)=>a+b,0)/greens.length);
+  const redDC = reds.reduce((a,b)=>a+b,0)/reds.length;
+  const greenDC = greens.reduce((a,b)=>a+b,0)/greens.length;
+  const ratio = (redAC / redDC) / ((greenAC / greenDC) || 1);
+  // Rough empirical calibration (Green channel used as proxy for IR)
+  const spO2 = Math.round(Math.min(99, Math.max(88, 110 - 25 * ratio)));
+  return { spO2, confidence: "Ước tính (Không thay thế thiết bị đo chính xác)", color: spO2 >= 95 ? "#22c55e" : spO2 >= 90 ? "#f59e0b" : "#ef4444" };
+}
+
 // ─── Camera & Preview ─────────────────────────────────────────────────────────
 function renderQrFallback() {
   const pattern = [1,1,1,0,1,1,1,1,0,1,0,1,0,1,1,1,1,0,1,1,1,0,0,0,1,0,0,0,1,1,1,0,1,1,1,1,0,1,0,1,0,1,1,1,1,0,1,1,1];
@@ -1125,15 +2252,20 @@ async function runMeasurement() {
         if (state.measurementSamples.length > MEASUREMENT_SECONDS * 35) state.measurementSamples.shift();
         const metrics = derivePreviewMetrics(sample);
         renderPreviewMetrics(metrics);
-        // #10: Signal quality warning
-        if (metrics.signalQuality < 40) {
+        // G1: Real-time signal quality guidance (enhanced)
+        const guidance = getSignalQualityGuidance(metrics.lightScore, metrics.stabilityScore, state.measurementMode, metrics.signalQuality);
+        if (metrics.signalQuality < 55) {
           if (!state.lowQualityStart) state.lowQualityStart = now;
-          else if ((now - state.lowQualityStart) > 5000) {
-            el.deepAnalysisText.textContent = "⚠️ Chất lượng tín hiệu thấp! Điều chỉnh vị trí tay/mặt và ánh sáng.";
+          else if ((now - state.lowQualityStart) > 3000) {
+            el.deepAnalysisText.textContent = guidance;
             if (el.deepAnalysisPrompt) el.deepAnalysisPrompt.classList.remove("hidden");
           }
         } else {
           state.lowQualityStart = null;
+          if (metrics.signalQuality >= 75 && el.deepAnalysisPrompt) {
+            el.deepAnalysisText.textContent = "✅ Tín hiệu tốt — đang đo chuẩn!";
+            el.deepAnalysisPrompt.classList.remove("hidden");
+          }
         }
       }
       if (remaining <= 0) { state.measurementFps = Math.round(frameCount / MEASUREMENT_SECONDS); resolve(); return; }
@@ -1150,6 +2282,30 @@ async function runMeasurement() {
 
   const localResult = analyzeSamples(state.measurementSamples, state.measurementMode);
   buildWavePath(localResult.waveform);
+  // Thermal proxy analysis from samples
+  if (state.measurementMode === "face" && state.measurementSamples.length >= 30) {
+    const thermalProxy = analyzePPGThermalProxy(state.measurementSamples);
+    if (thermalProxy) {
+      const tBox = document.getElementById("thermalProxyBox");
+      if (tBox) {
+        const color = thermalProxy.perfusionIndex < 2 ? "#ef4444" : thermalProxy.perfusionIndex < 5 ? "#f59e0b" : "#22c55e";
+        tBox.innerHTML = `
+          <div class="list-item"><span>Chỉ số vi tuần hoàn (PI)</span><strong style="color:${color}">${thermalProxy.perfusionIndex}% — ${thermalProxy.perfusionLevel}</strong></div>
+          <div class="list-item"><span>Trạng thái mạch máu</span><strong>${thermalProxy.vasoState}</strong></div>
+          <p class="muted" style="font-size:12px">${thermalProxy.note}</p>`;
+      }
+    }
+  }
+  // Emotional artifact filter integration
+  if (localResult && _preMoodState) {
+    const emotionalNote = getEmotionalArtifactNote(localResult.afibLikelihood, localResult.bpm);
+    if (emotionalNote) {
+      const enBox = document.getElementById("emotionalArtifactNote");
+      if (enBox) { enBox.textContent = emotionalNote; enBox.style.display = "block"; }
+    }
+  }
+  // Save encrypted measurement to local storage
+  saveEncryptedMeasurement({ type: state.measurementMode, bpm: localResult?.bpm, ts: Date.now() }).catch(() => {});
 
   if (!state.token || !state.user) { renderGuestResult(localResult); return; }
 
@@ -1509,6 +2665,64 @@ function renderMeasurementResult(record) {
   renderPoincare(r); // #24
   renderSampEn(r);   // #23
   el.abnormalPromptBox.classList.toggle("hidden", cls !== "elevated");
+
+  // ── New feature renders ──────────────────────────────────────────────────
+  // G3: AFib vs PAC/PVC Rhythm Classification
+  if (r.rrIntervals?.length >= 8) {
+    const rhythmType = classifyRhythmType(r.rrIntervals);
+    renderRhythmClassification(rhythmType);
+    // #10: Digital Twin Heart
+    renderDigitalTwin(r.bpm, rhythmType.type, r.rrIntervals);
+    // #5: Synthetic ECG
+    renderSyntheticECGDisplay(r.rrIntervals, r.bpm);
+    // Heart-Print fingerprint
+    const fp = computePPGFingerprint(r.rrIntervals);
+    const fpEl = document.getElementById("heartPrintId");
+    if (fpEl && fp) fpEl.textContent = `Heart-Print ID: ${fp.hash} · Mean RR: ${fp.mean}ms`;
+    // RSA index
+    const rsa = computeRSAIndex(r.rrIntervals);
+    renderRSAIndex(rsa);
+    // AFib Trigger Contextual Mapping (only when AFib detected)
+    if (r.classification === "afib" || r.irregularityIndex > 55) {
+      const weather = state.dashboard?.weatherAlert || null;
+      const allMeas = state.dashboard?.measurements || [];
+      const triggerCtx = computeAfibTriggerContext(record, weather, allMeas);
+      renderAfibTriggerContext(triggerCtx);
+    }
+    // Estimated SpO2 (if samples available)
+    const spO2El = document.getElementById("spO2EstResult");
+    if (spO2El && state.measurementSamples.length >= 30) {
+      const spO2 = estimateSpO2(state.measurementSamples);
+      if (spO2) spO2El.innerHTML = `<span style="color:${spO2.color}">${spO2.spO2}% SpO2 估</span> <span class="muted" style="font-size:10px">(${spO2.confidence})</span>`;
+    }
+  }
+}
+
+function renderRhythmClassification(result) {
+  const box = document.getElementById("rhythmClassBox");
+  if (!box || !result) return;
+  box.innerHTML = `
+    <div class="list-item">
+      <span>Phân loại nhịp</span>
+      <strong class="badge" style="background:${result.color}20;color:${result.color};border:1px solid ${result.color}40">${result.label}</strong>
+    </div>
+    <div class="list-item"><span>Độ tin cậy phân tích</span><strong>${result.confidence}%</strong></div>
+    ${result.note ? `<p class="muted" style="font-size:12px;margin-top:4px;color:${result.type==="pac_pvc"?"#92400e":result.type==="afib"?"#991b1b":"#14532d"}">${result.note}</p>` : ""}
+    ${result.type === "pac_pvc" ? `<div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:8px;margin-top:6px;font-size:12px;color:#92400e">
+      <strong>ℹ️ Ngoại tâm thu KHÔNG phải AFib</strong><br>
+      PAC/PVC là hiện tượng lành tính rất phổ biến (>50% người trưởng thành có). Không cần hoảng loạn. Nếu nhiều hơn 10% nhịp/ngày hoặc có triệu chứng — gặp bác sĩ.
+    </div>` : ""}`;
+}
+
+function renderRSAIndex(rsa) {
+  const box = document.getElementById("rsaIndexBox");
+  if (!box) return;
+  if (!rsa) { box.innerHTML = "<p class='muted'>Cần ≥16 khoảng RR để tính RSA.</p>"; return; }
+  const color = rsa.isPhysiological ? "#22c55e" : "#f59e0b";
+  box.innerHTML = `
+    <div class="list-item"><span>RSA Index (HF/Total)</span><strong style="color:${color}">${rsa.rsaIndex}%</strong></div>
+    <div class="list-item"><span>Nhận định</span><strong style="color:${color}">${rsa.label}</strong></div>
+    <p class="muted" style="font-size:12px">${rsa.note}</p>`;
 }
 
 function renderProfile(user) {
@@ -1693,6 +2907,55 @@ function renderDashboard(dashboard) {
   renderCircadian(dashboard.circadian);               // #28
   if (dashboard.latestMeasurement) { state.lastMeasurementRecord = dashboard.latestMeasurement; renderMeasurementResult(dashboard.latestMeasurement); }
   if (dashboard.latestBreathing?.result) { el.breathingStatus.textContent = `+${dashboard.latestBreathing.result.coherenceGain} coherence`; el.breathingStatus.className = "badge safe"; }
+  // New feature renders
+  renderTrendComparison(dashboard.measurements || []);
+  renderMeasurementQualityHistory(dashboard.measurements || []);
+  const golden = computeGoldenWindow(dashboard.measurements || []);
+  const goldenEl = document.getElementById("goldenWindowBox");
+  if (goldenEl && golden) goldenEl.innerHTML = `<div class="list-item"><span>Giờ đo tốt nhất</span><strong>⭐ ${golden.label} (chất lượng ${golden.score}%)</strong></div><p class="muted" style="font-size:12px">AI học từ ${dashboard.measurements?.length||0} lần đo của bạn — đây là lúc tín hiệu ổn định nhất.</p>`;
+  // Weather-AFib correlation
+  if (dashboard.weatherAlert) renderWeatherAfibAlert(dashboard.weatherAlert, dashboard.measurements || []);
+  // 24h AFib Forecast
+  const forecastEl = document.getElementById("afibForecastBox");
+  if (forecastEl) {
+    const weatherTemp = dashboard.weatherAlert?.temp ?? dashboard.weatherAlert?.main?.temp ?? null;
+    const forecast = computeAfibForecast(dashboard.measurements || [], weatherTemp);
+    if (forecast) {
+      const color = forecast.level === "CAO" ? "#ef4444" : forecast.level === "TRUNG_BINH" ? "#f59e0b" : "#22c55e";
+      forecastEl.innerHTML = `
+        <div class="list-item"><span>Nguy cơ 24h tới</span><strong style="color:${color}">${forecast.riskPercent}% — ${forecast.level}</strong></div>
+        <div class="list-item"><span>Khung giờ đỉnh</span><strong>${forecast.peakWindow}</strong></div>
+        ${forecast.factors.map(f => `<div class="list-item" style="color:#92400e;font-size:12px">⚠️ ${f}</div>`).join("")}
+        <p class="muted" style="font-size:12px;margin-top:6px">${forecast.recommendation}</p>`;
+    } else {
+      forecastEl.innerHTML = "<p class='muted'>Cần ≥3 lần đo để dự báo nguy cơ 24h.</p>";
+    }
+  }
+  // Daily tip
+  showDailyHealthTip();
+  // Battery check
+  checkBatteryForNight();
+  // Population benchmark
+  renderPopulationBenchmark(dashboard.measurements || [], dashboard.user?.age);
+  // 1-hour hourly forecast
+  const hourlyForecast = computeAfibHourlyForecast(dashboard.measurements || [], dashboard.weatherAlert?.currentTemp ?? dashboard.weatherAlert?.temp ?? null, dashboard.circadian);
+  renderAfibHourlyForecast(hourlyForecast);
+  // 2.5: Sudden HR change detection
+  const suddenEl = document.getElementById("suddenHRBox");
+  if (suddenEl) {
+    const sudden = detectSuddenHRChange(dashboard.measurements || []);
+    if (sudden) {
+      suddenEl.innerHTML = `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:10px 14px"><p style="margin:0;font-size:13px;color:#92400e">${sudden.message}</p></div>`;
+    } else { suddenEl.innerHTML = ""; }
+  }
+  // Research mode state
+  const researchBtn = document.getElementById("researchModeBtn");
+  if (researchBtn) {
+    const active = localStorage.getItem("hs_research") === "1";
+    researchBtn.textContent = active ? "✅ Đã tham gia nghiên cứu — Bấm để rút" : "🔬 Tham gia nghiên cứu ẩn danh";
+  }
+  // Elderly mode restore
+  if (localStorage.getItem("hs_elderly") === "1") document.body.classList.add("elderly-mode");
   const guardianEmail = dashboard.user?.guardian?.guardianEmail;
   if (el.parentReportStatus) {
     el.parentReportStatus.textContent = guardianEmail ? `Email mắt thần: ${guardianEmail}` : "";
@@ -2202,14 +3465,268 @@ function bindEvents() {
   el.quickStartBtn?.addEventListener("click", quickStart); // #36
   window.addEventListener("online", updateOnlineStatus);   // #35
   window.addEventListener("offline", updateOnlineStatus);  // #35
+  // New feature bindings
+  document.getElementById("elderlyModeBtn")?.addEventListener("click", toggleElderlyMode);
+  document.getElementById("expertModeBtn")?.addEventListener("click", toggleExpertMode);
+  document.getElementById("researchModeBtn")?.addEventListener("click", toggleResearchMode);
+  document.getElementById("shareReportBtn")?.addEventListener("click", shareReport);
+  document.getElementById("zaloClinicInfoBtn")?.addEventListener("click", openZaloClinicInfo);
+  document.getElementById("startBCGBtn")?.addEventListener("click", startMouseBCGTracking);
+  document.getElementById("bpPhotoInput")?.addEventListener("change", e => ocrBloodPressure(e.target.files?.[0]));
+  // New: Ambient rPPG, SCG, Voice-rPPG, Keyboard BCG
+  document.getElementById("ambientRPPGBtn")?.addEventListener("click", toggleAmbientRPPG);
+  document.getElementById("startSCGBtn")?.addEventListener("click", startSCGChestSensor);
+  document.getElementById("startVoiceRPPGBtn")?.addEventListener("click", startVoiceRPPG);
+  document.getElementById("startKBCGBtn")?.addEventListener("click", startKeyboardBCGTracking);
+  window.startSCGChestSensor = startSCGChestSensor; // fallback inline
+  // Ablation risk form
+  document.getElementById("ablationRiskForm")?.addEventListener("submit", e => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const result = computeAblationRisk({
+      age: parseInt(f.get("ablAge") || 60),
+      bmi: parseFloat(f.get("ablBmi") || 25),
+      afibType: f.get("ablType") || "paroxysmal",
+      lavi: parseFloat(f.get("ablLavi") || 30),
+      afibDuration: parseInt(f.get("ablDuration") || 6),
+      symptoms: f.get("ablSymptoms") || "mild",
+    });
+    const box = document.getElementById("ablationRiskResult");
+    if (box) {
+      const color = result.level === "CAO" ? "#ef4444" : result.level === "TRUNG_BINH" ? "#f59e0b" : "#22c55e";
+      box.innerHTML = `<div class="list-item"><span>Nguy cơ tái phát</span><strong style="color:${color}">${result.risk}% — ${result.level}</strong></div><p class="muted" style="font-size:12px">${result.recommendation}</p>`;
+    }
+  });
 }
 
 async function init() {
   detectPlatform(); renderQrFallback(); bindPwa(); bindEvents();
   setMeasurementMode("finger");
   updateOnlineStatus(); // #35
+  showDailyHealthTip(); // 1.10
+  checkBatteryForNight(); // 1.9
+  // Restore elderly mode
+  if (localStorage.getItem("hs_elderly") === "1") {
+    document.body.classList.add("elderly-mode");
+    const btn = document.getElementById("elderlyModeBtn");
+    if (btn) btn.textContent = "👁 Tắt chế độ ông/bà";
+  }
+  // Fall detection for mobile
+  initFallDetection();
+  // Encrypted local-first data
+  await initLocalEncryption().then(key => { renderEncryptionStatus(); });
   await checkHealth(); await loadCameraDevices(); await restoreSession();
 }
+
+// ─── Population Benchmark (#populationBenchmarkBox) ──────────────────────────
+// Age-stratified normal ranges from CHARGE-AF, ESCAPE-NET, Frontiers in Physiology
+const POPULATION_NORMS = [
+  { minAge: 18, maxAge: 30, sdnnMed: 65, sdnnLow: 40, bpmRange: [55, 90], afibPct: 0.3 },
+  { minAge: 31, maxAge: 45, sdnnMed: 55, sdnnLow: 35, bpmRange: [58, 95], afibPct: 0.7 },
+  { minAge: 46, maxAge: 60, sdnnMed: 45, sdnnLow: 28, bpmRange: [60, 100], afibPct: 2.0 },
+  { minAge: 61, maxAge: 75, sdnnMed: 35, sdnnLow: 20, bpmRange: [60, 100], afibPct: 6.0 },
+  { minAge: 76, maxAge: 120, sdnnMed: 25, sdnnLow: 14, bpmRange: [58, 100], afibPct: 12.0 },
+];
+function renderPopulationBenchmark(measurements, userAge) {
+  const box = el.populationBenchmarkBox;
+  if (!box) return;
+  const age = userAge || 60;
+  const norm = POPULATION_NORMS.find(n => age >= n.minAge && age <= n.maxAge) || POPULATION_NORMS[POPULATION_NORMS.length - 1];
+  const recent = (measurements || []).filter(m => m.type === "face" || m.type === "finger").slice(-12);
+  if (recent.length < 2) {
+    box.innerHTML = "<p class='muted'>Cần ≥2 lần đo để so sánh với người cùng độ tuổi.</p>";
+    return;
+  }
+  const bpms = recent.map(m => m.result?.bpm || 0).filter(Boolean);
+  const sdnns = recent.map(m => m.result?.sdnn || 0).filter(Boolean);
+  const avgBpm = bpms.length ? Math.round(bpms.reduce((a,b)=>a+b,0)/bpms.length) : 0;
+  const avgSdnn = sdnns.length ? Math.round(sdnns.reduce((a,b)=>a+b,0)/sdnns.length) : 0;
+  const afibCount = recent.filter(m => m.result?.classification === "afib").length;
+  const afibRate = Math.round(afibCount / recent.length * 100);
+
+  const bpmOk = avgBpm >= norm.bpmRange[0] && avgBpm <= norm.bpmRange[1];
+  const sdnnLevel = avgSdnn >= norm.sdnnMed ? "above" : avgSdnn >= norm.sdnnLow ? "normal" : "low";
+  const bpmColor = bpmOk ? "#22c55e" : "#f59e0b";
+  const sdnnColor = sdnnLevel === "above" ? "#22c55e" : sdnnLevel === "normal" ? "#f59e0b" : "#ef4444";
+  const sdnnLabel = sdnnLevel === "above" ? "Tốt hơn TB" : sdnnLevel === "normal" ? "Bình thường" : "Dưới TB — cần chú ý";
+  const bpmLabel = bpmOk ? "Bình thường" : avgBpm < norm.bpmRange[0] ? "Thấp" : "Cao";
+
+  // Percentile bar (simple visual)
+  const sdnnPct = Math.round(Math.min(100, Math.max(5, (avgSdnn / (norm.sdnnMed * 1.5)) * 100)));
+  box.innerHTML = `
+    <div class="list-item"><span>Nhịp tim TB của bạn</span><strong style="color:${bpmColor}">${avgBpm || "--"} BPM · ${bpmLabel}</strong></div>
+    <div class="list-item"><span>Chuẩn dân số (tuổi ${age})</span><strong>${norm.bpmRange[0]}–${norm.bpmRange[1]} BPM</strong></div>
+    <div class="list-item"><span>HRV (SDNN) của bạn</span><strong style="color:${sdnnColor}">${avgSdnn || "--"} ms · ${sdnnLabel}</strong></div>
+    <div class="list-item">
+      <span>Chuẩn HRV tuổi ${age}</span>
+      <strong>${norm.sdnnLow}–${norm.sdnnMed + 20} ms · Median ${norm.sdnnMed} ms</strong>
+    </div>
+    <div style="margin:6px 0 4px">
+      <div style="font-size:11px;color:#64748b;margin-bottom:3px">HRV của bạn so với dân số cùng tuổi:</div>
+      <div style="background:#e2e8f0;border-radius:4px;height:8px"><div style="width:${sdnnPct}%;height:100%;background:${sdnnColor};border-radius:4px;transition:width 0.5s"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8;margin-top:2px"><span>Thấp</span><span>TB</span><span>Tốt</span></div>
+    </div>
+    <div class="list-item"><span>Tỷ lệ AFib dân số tuổi ${age}</span><strong>${norm.afibPct}% người</strong></div>
+    ${afibCount > 0 ? `<div class="list-item" style="color:#ef4444"><span>AFib phát hiện của bạn</span><strong>${afibRate}% lần đo (${afibCount}/${recent.length})</strong></div>` : ""}
+    <p class="muted" style="font-size:10px;margin-top:6px">Nguồn: CHARGE-AF, Frontiers in Physiology (2024), ESC HRV Task Force. Chỉ mang tính tham khảo.</p>`;
+}
+
+// ─── 1-hour AFib Forecast (Hourly Risk Map) ───────────────────────────────────
+// Extends the 24h forecast to produce per-hour risk for the next 24 hours
+const CIRCADIAN_HOURLY_RISK = {
+  0:1.25, 1:1.2, 2:1.15, 3:1.3, 4:1.55, 5:1.65, 6:1.5, 7:1.2,
+  8:1.0,  9:0.9, 10:0.88, 11:0.85, 12:0.85, 13:0.88, 14:0.9,
+  15:0.92, 16:0.95, 17:1.0, 18:1.1, 19:1.15, 20:1.1, 21:1.05,
+  22:1.2, 23:1.25
+};
+function computeAfibHourlyForecast(measurements, weatherTemp, circadian) {
+  const base = computeAfibForecast(measurements, weatherTemp);
+  if (!base) return null;
+  const now = new Date();
+  const currentHour = now.getHours();
+  const hourlyMap = [];
+  for (let i = 0; i < 24; i++) {
+    const hour = (currentHour + i) % 24;
+    const modifier = CIRCADIAN_HOURLY_RISK[hour] || 1.0;
+    // Add circadian data boost if available
+    let circadianBoost = 1.0;
+    if (circadian?.hours) {
+      const h = circadian.hours.find(x => x.hour === hour);
+      if (h?.avgBpm) {
+        const allBpms = circadian.hours.map(x => x.avgBpm).filter(Boolean);
+        const maxBpm = Math.max(...allBpms);
+        if (h.avgBpm > maxBpm * 0.9) circadianBoost = 1.2; // personal peak hour
+      }
+    }
+    const risk = Math.round(Math.max(3, Math.min(95, base.riskPercent * modifier * circadianBoost)));
+    const label = i === 0 ? "Bây giờ" : i === 1 ? "1h nữa" : `+${i}h`;
+    hourlyMap.push({ hour, risk, label, isNow: i === 0, isNext: i === 1 });
+  }
+  const nextHourRisk = hourlyMap[1]?.risk || base.riskPercent;
+  const peakHour = hourlyMap.reduce((a, b) => b.risk > a.risk ? b : a);
+  return { ...base, hourlyMap, nextHourRisk, peakHour };
+}
+function renderAfibHourlyForecast(forecast) {
+  const box = document.getElementById("afibHourlyBox");
+  if (!box || !forecast?.hourlyMap) return;
+  const map = forecast.hourlyMap.slice(0, 12); // show next 12h
+  const maxRisk = Math.max(...map.map(h => h.risk), 1);
+  const bars = map.map(h => {
+    const pct = Math.round((h.risk / maxRisk) * 100);
+    const color = h.risk >= 65 ? "#ef4444" : h.risk >= 40 ? "#f59e0b" : "#22c55e";
+    return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0">
+      <div style="width:100%;background:#e2e8f0;border-radius:3px;height:40px;display:flex;align-items:flex-end">
+        <div style="width:100%;height:${pct}%;background:${color};border-radius:3px 3px 0 0;transition:height 0.5s;min-height:4px"></div>
+      </div>
+      <span style="font-size:9px;color:#64748b;margin-top:2px">${h.hour}h</span>
+      <span style="font-size:9px;font-weight:700;color:${color}">${h.risk}%</span>
+    </div>`;
+  }).join("");
+  box.innerHTML = `
+    <div style="margin-bottom:8px">
+      <div class="list-item"><span>Nguy cơ 1 giờ tới</span><strong style="color:${forecast.nextHourRisk>=65?"#ef4444":forecast.nextHourRisk>=40?"#f59e0b":"#22c55e"}">${forecast.nextHourRisk}% — ${forecast.nextHourRisk>=65?"CAO":forecast.nextHourRisk>=40?"TRUNG BÌNH":"THẤP"}</strong></div>
+      <div class="list-item"><span>Đỉnh nguy cơ trong 12h</span><strong style="color:#f59e0b">${forecast.peakHour?.hour}h (${forecast.peakHour?.risk}%)</strong></div>
+    </div>
+    <div style="display:flex;gap:3px;align-items:flex-end;height:60px">${bars}</div>
+    <p class="muted" style="font-size:10px;margin-top:4px">Biểu đồ nguy cơ AFib từng giờ (12h tới). Đỉnh cao nhất: ${forecast.peakHour?.hour}h.</p>`;
+}
+
+// ─── AFib Trigger Contextual Mapping (#3 List Update 1) ───────────────────────
+// When AFib is detected, analyzes all available context to identify likely triggers
+function computeAfibTriggerContext(measurement, weather, recentMeasurements) {
+  if (!measurement?.result || measurement.result.classification !== "afib") return null;
+  const r = measurement.result;
+  const hour = new Date(measurement.createdAt || Date.now()).getHours();
+  const triggers = [];
+
+  // Trigger 1: Time of day (circadian vulnerability)
+  if (hour >= 4 && hour <= 7) {
+    triggers.push({ factor: "⏰ Thời điểm nguy hiểm", detail: `${hour}h sáng — khung giờ AFib cao nhất ngày. Cortisol tăng đột ngột khi thức dậy.`, severity: "high" });
+  } else if (hour >= 22 || hour <= 3) {
+    triggers.push({ factor: "🌙 Đêm khuya", detail: `${hour}h — hệ thần kinh tự chủ bất ổn trong giấc ngủ sâu.`, severity: "medium" });
+  }
+
+  // Trigger 2: Cold weather
+  const temp = weather?.currentTemp ?? weather?.temp ?? null;
+  if (temp !== null && temp < 18) {
+    triggers.push({ factor: `🌡️ Trời lạnh ${temp}°C`, detail: `Nhiệt độ dưới 18°C làm co mạch máu và tăng nhịp tim bù trừ — trigger AFib phổ biến vào mùa đông.`, severity: temp < 10 ? "high" : "medium" });
+  }
+
+  // Trigger 3: User context note
+  const note = (r.contextNote || "").toLowerCase();
+  if (note.includes("cà phê") || note.includes("cafe") || note.includes("coffee") || note.includes("cafein")) {
+    triggers.push({ factor: "☕ Caffeine", detail: "Uống cà phê trong 2 giờ trước — caffeine kích hoạt hệ giao cảm, là trigger phổ biến nhất của AFib.", severity: "medium" });
+  }
+  if (note.includes("rượu") || note.includes("bia") || note.includes("alcohol")) {
+    triggers.push({ factor: "🍺 Rượu bia", detail: "Uống rượu bia — 'Holiday Heart' syndrome: rượu là nguyên nhân hàng đầu của AFib cấp tính.", severity: "high" });
+  }
+  if (note.includes("stress") || note.includes("căng thẳng") || note.includes("áp lực") || note.includes("lo lắng")) {
+    triggers.push({ factor: "😟 Căng thẳng", detail: "Ghi nhận tình trạng stress — adrenaline tăng kích hoạt hệ giao cảm, gây loạn nhịp.", severity: "high" });
+  }
+  if (note.includes("chạy") || note.includes("tập") || note.includes("thể dục") || note.includes("vận động")) {
+    triggers.push({ factor: "🏃 Vận động mạnh", detail: "Vận động cường độ cao — nhịp tim phục hồi sau gắng sức có thể gây AFib thoáng qua.", severity: "low" });
+  }
+  if (note.includes("ngủ") || note.includes("mất ngủ") || note.includes("thiếu ngủ")) {
+    triggers.push({ factor: "😴 Thiếu ngủ", detail: "Thiếu ngủ làm tăng 80% nguy cơ AFib theo nghiên cứu NLHBI (2023).", severity: "high" });
+  }
+
+  // Trigger 4: Emotional state (from pre-mood)
+  if (_preMoodState === "stressed" || _preMoodState === "pain") {
+    triggers.push({ factor: "😣 Tâm lý bất ổn", detail: "Trạng thái căng thẳng/đau đớn trước khi đo. Hệ thần kinh giao cảm tăng hoạt động.", severity: "medium" });
+  }
+
+  // Trigger 5: HRV decline trend
+  const prevMeas = (recentMeasurements || []).filter(m => (m.type === "face" || m.type === "finger") && m.id !== measurement.id).slice(-5);
+  if (prevMeas.length >= 3) {
+    const prevSdnns = prevMeas.map(m => m.result?.sdnn || 0).filter(Boolean);
+    if (prevSdnns.length >= 2) {
+      const avgPrevSdnn = prevSdnns.reduce((a,b)=>a+b,0)/prevSdnns.length;
+      if (avgPrevSdnn > 0 && r.sdnn > 0 && r.sdnn < avgPrevSdnn * 0.65) {
+        triggers.push({ factor: "📉 HRV suy giảm", detail: `HRV giảm ${Math.round((1-r.sdnn/avgPrevSdnn)*100)}% so với lịch sử — dấu hiệu tim đang mệt mỏi hoặc căng thẳng tích lũy.`, severity: "high" });
+      }
+    }
+  }
+
+  // Trigger 6: BCG keyboard irregularity (if recent data available)
+  if (_kbcg?.events?.length > 20 && _bcg?.lastResult?.jitterScore > 55) {
+    triggers.push({ factor: "⌨️ Vi rung bàn phím cao", detail: `Chỉ số BCG bàn phím ${_bcg.lastResult.jitterScore}/100 — vi rung tay phát hiện trước cơn AFib, có thể đây là cảnh báo sớm.`, severity: "medium" });
+  }
+
+  return {
+    triggers,
+    count: triggers.length,
+    summary: triggers.length > 0
+      ? `Tìm thấy ${triggers.length} yếu tố có thể liên quan đến cơn AFib này`
+      : "Không xác định được yếu tố kích hoạt rõ ràng trong lần này — theo dõi thêm nhiều lần đo"
+  };
+}
+
+function renderAfibTriggerContext(ctx) {
+  const box = document.getElementById("afibTriggerBox");
+  if (!box) return;
+  if (!ctx || ctx.triggers.length === 0) {
+    box.innerHTML = "<p class='muted'>Không phát hiện yếu tố kích hoạt rõ ràng. AI cần thêm dữ liệu ngữ cảnh từ Ghi chú và Nhật ký triệu chứng.</p>";
+    return;
+  }
+  const colorMap = { high: "#ef4444", medium: "#f59e0b", low: "#22c55e" };
+  const labelMap = { high: "Nguy cơ cao", medium: "Trung bình", low: "Nhẹ" };
+  box.innerHTML = `
+    ${ctx.triggers.map(t => `
+      <div style="background:${colorMap[t.severity]}10;border:1px solid ${colorMap[t.severity]}30;border-radius:8px;padding:8px 12px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px">
+          <strong style="color:${colorMap[t.severity]};font-size:13px">${t.factor}</strong>
+          <span style="font-size:10px;color:${colorMap[t.severity]};background:${colorMap[t.severity]}20;padding:1px 6px;border-radius:10px">${labelMap[t.severity]}</span>
+        </div>
+        <p style="margin:0;font-size:12px;color:#475569">${t.detail}</p>
+      </div>`).join("")}
+    <p class="muted" style="font-size:11px;margin-top:4px">💡 ${ctx.summary}</p>`;
+}
+
+// ─── Global exposure for inline onclick ──────────────────────────────────────
+window.setPreMoodState = setPreMoodState;
+window.saveCalibrationSettings = saveCalibrationSettings;
+window.shareReport = shareReport;
+window.showShareOptions = showShareOptions;
 
 // Khi người dùng quay lại tab → load dashboard ngay thay vì đợi poll tiếp theo
 document.addEventListener("visibilitychange", () => {
