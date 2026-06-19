@@ -3,10 +3,6 @@
   "version": "3.1.0",
   "private": true,
   "description": "HEARTSENSE multi-platform workspace: legacy prototype + production web/mobile/api scaffold.",
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
