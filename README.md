@@ -1,3 +1,62 @@
+# FACE PPG - Giải pháp — 5 thuật toán song song chạy cùng lúc:
+
+1. CHROM (De Haan 2013): Ánh sáng đèn làm R, G, B thay đổi cùng tỉ lệ → đặc trưng "chrominance" của da giúp tách riêng nhiễu ánh sáng ra khỏi tín hiệu tim. Tốt nhất khi đèn huỳnh quang nhấp nháy.
+2. POS (Wang 2017): Chiếu tín hiệu lên hướng vuông góc với màu da → chuyển động đầu (dọc theo hướng màu da) bị triệt tiêu, tim (vuông góc màu da) giữ lại. Tốt nhất khi người gật đầu nhẹ.
+3. Region-Fused (4 vùng mặt): Chia mặt thành 4 vùng (Trán / Má trái / Má phải / Mũi), mỗi vùng tính SNR riêng. Vùng nào tín hiệu tốt hơn → đóng góp nhiều hơn. Thích ứng theo từng khuôn mặt.
+4. ICA Green Residual (Poh 2010): Kênh Green chứa nhiều tín hiệu tim nhất. Dùng R và B làm "reference nhiễu" → trừ đi → còn lại tín hiệu tim thuần túy.
+5. MTTS-CAN (Liu 2020): So sánh frame liên tiếp theo thời gian → ánh sáng thay đổi chậm (background noise) gần bằng 0, tín hiệu tim thay đổi nhanh → nổi bật lên.
+
+Hệ thống tự chọn phương pháp tốt nhất: Sau khi chạy cả 5, tính SNR (Signal-to-Noise Ratio) của từng phương pháp → chọn phương pháp có SNR cao nhất sau lọc.
+
+BlazeFace (TensorFlow.js): Tự động xác định vị trí khuôn mặt trong frame → chỉ đo đúng vùng da, không đo nền nhà hoặc áo.
+
+Điều chỉnh cho người da sẫm màu: Người da sẫm (Fitzpatrick V-VI) hấp thụ nhiều ánh sáng hơn → tín hiệu yếu hơn → hệ thống điều chỉnh skinTone='dark' → hạ bias của POS (ít hiệu quả hơn với da sẫm), ưu tiên CHROM và Region-Fused hơn.
+
+File & Code: app.js → analyzePPGSignal() dòng 1806–1847. extractChromSignal() dòng 431, extractPosSignal() dòng 812, extractFaceRegionFusedSignal() dòng 924, extractGreenResidualICA() dòng 956, extractMttsSignal() dòng 894. BlazeFace: TensorFlow.js library. Dữ liệu: camera stream, tất cả xử lý trong trình duyệt. """
+
+# 1 Đo ngón trỏ lên camera """ Code:
+- app.js · analyzePPGSignal() · dòng 1769–1805 — thu tín hiệu, chọn kênh màu tốt nhất
+- app.js · butterworthBandpass() · dòng 403–409 — lọc nhiễu, giữ lại tần số tim
+- ppg-worker.js · fftBpm() · dòng 44–68 — biến đổi Fourier ra BPM
+- ppg-worker.js · autocorrBpm() · dòng 71–109 — tự tương quan xác nhận chu kỳ """
+
+# 2 Phát hiện AFib (Rung nhĩ) """ Code:
+- app.js · analyzePPGSignal() · dòng 2105–2296 — toàn bộ 17 nguồn bằng chứng tính điểm
+- app.js · checkTemporalConsistency() · dòng 490–500 — kiểm tra loạn nhịp kéo dài liên tục
+- app.js · hampelFilter() · dòng 451–466 — lọc nhịp ngoại lai trước khi phân tích
+- server.js · analyzeMeasurement() · dòng 1340–1364 — phân loại cuối: normal / elevated / afib """
+
+#  3 Kết quả tức thì (BPM · HRV · Stroke Risk · AFib Index) """ Code:
+- app.js · dòng 2299 — hrvScore = (SDNN/90 × 55) + (RMSSD/65 × 45)
+- app.js · dòng 2296 — afibScore = min(95, afibEvidence × 0.413)
+- server.js · dòng 1306–1309 — strokeRiskScore tổng hợp 8 thành phần
+- app.js · renderMeasurementResult() · dòng 7456–7512 — hiển thị toàn bộ kết quả lên màn hình """
+
+# 4 Pocket Cardiologist AI — Bác sĩ ảo tiếng Việt 
+""" Code:
+- app.js · askPocketCardiologist() · dòng 9747–9806 — flow chính: nhận câu hỏi → gọi Gemini → fallback rule-based
+- app.js · dòng 9784 — api("/api/pocket-cardiologist", { question, history, ctx }) — gửi kèm kết quả đo thực tế
+- app.js · _pcRuleBasedAnswer() · dòng 9803 — fallback offline khi Gemini lỗi
+- app.js · dòng 9738 — pcSpeak(answer) — đọc to câu trả lời bằng giọng nói tiếng Việt """
+
+# ⑤ SOS + Người giám hộ """ Code:
+- app.js · startSosCountdown() · dòng 8516–8527 — bắt đầu đếm ngược 15 giây, phát chuông báo
+- app.js · triggerSos() · dòng 8529–8565 — lấy GPS, hiển thị nút gọi người thân, gửi alert lên server
+- app.js · dòng 8537–8546 — navigator.geolocation.getCurrentPosition(...) lấy tọa độ GPS thực
+- app.js · dòng 7129–7134 — kích hoạt SOS tự động sau khi server xác nhận AFib """
+
+# 6. Holter 7 ngày — Phát hiện AFib từng cơn """ Code:
+- app.js · dòng 4920–4929 — định nghĩa cấu trúc Holter, 6 khung giờ/ngày
+- app.js · _getCurrentHolterWindow() · dòng 4935–4946 — kiểm tra có đang trong khung giờ hợp lệ không
+- app.js · _logHolterMeasurement() · dòng 4961–4969 — ghi kết quả đo vào đúng slot ngày/giờ
+- app.js · dòng 7124 — if (_holter.active) _logHolterMeasurement(localResult) — tự động ghi sau mỗi lần đo
+
+# 7 Xuất báo cáo bác sĩ — Chia sẻ qua Zalo/Gmail  Code:
+- app.js · shareReport() · dòng 5347–5369 — tạo link + tóm tắt kết quả đo gần nhất
+- app.js · _doShare() · dòng 5309–5345 — phân nhánh: Zalo (Web Share API) vs Gmail (mailto/web)
+- app.js · dòng 5312–5322 — navigator.share(...) → Zalo mobile; fallback → dialog copy link
+- app.js · dòng 5324–5334 — Gmail mobile dùng mailto:, desktop dùng Gmail web compose """
+
 # HEARTSENSE Workspace
 
 Workspace nay hien co 2 lop song song:
