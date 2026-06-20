@@ -1478,6 +1478,71 @@
 • CHA₂DS₂-VASc Score ESC Guidelines 2020 — <i>Hướng dẫn lâm sàng ESC 2020 — hướng dẫn điều trị AFib toàn diện nhất, cập nhật mới nhất của Hội Tim mạch Châu Âu</i><br>
 • Camm et al. J Am Coll Cardiol 2018 — <i>JACC (Journal of the American College of Cardiology): tạp chí Tim mạch uy tín nhất của Mỹ, IF ~24. Prof. Camm là chuyên gia AFib hàng đầu thế giới</i></div>`,
 
+/* ② KẾT LUẬN TRẠNG THÁI (riskBadge) ★ PRIORITY */
+'fd-classification': `
+<p class="fd-intro">👉 Sau 60 giây, HeartSense cho biết nhịp tim của bạn đang ở trạng thái nào: Bình thường, Cần theo dõi, hay Nghi ngờ Rung nhĩ. Điều này quan trọng vì rung nhĩ làm cho buồng trên của tim co bóp hỗn loạn 350–600 lần/phút thay vì 60–100 lần bình thường, dẫn đến nguy cơ đột quỵ rất cao.</p>
+
+<h4>🔍 3 Trạng thái kết luận — Ý nghĩa từng mức</h4>
+<table>
+  <tr><th>Kết luận</th><th>Màu badge</th><th>Điều kiện kỹ thuật</th><th>Bạn nên làm gì</th></tr>
+  <tr><td><strong>✅ Bình thường</strong></td><td>🟢 Xanh lá</td><td>AFib Index &lt;25 · CV &lt;15% · BPM 50–100 · HRV ổn định</td><td>Tiếp tục lịch đo Holter hàng ngày, không cần lo lắng</td></tr>
+  <tr><td><strong>⚠️ Cần theo dõi</strong></td><td>🟡 Vàng</td><td>AFib Index 25–54 · CV 15–25% · hoặc BPM &gt;100/&lt;50 · hoặc HRV bất thường</td><td>Đo lại sau 30 phút, hỏi Pocket Cardiologist, ghi vào nhật ký triệu chứng</td></tr>
+  <tr><td><strong>🔴 Nghi ngờ AFib</strong></td><td>🔴 Đỏ</td><td>AFib Index ≥55 · hoặc CV &gt;25% liên tiếp ≥2 lần đo · Stroke Risk &gt;40%</td><td>Kích hoạt SOS, gặp bác sĩ tim mạch trong 24 giờ, làm ECG xác nhận</td></tr>
+</table>
+
+<h4>⚙️ Cơ chế phân loại — HeartSense tính điểm thế nào?</h4>
+<p>HeartSense không dùng một chỉ số duy nhất để kết luận — hệ thống chạy <strong>17 phép kiểm tra thống kê song song</strong> trên toàn bộ chuỗi dữ liệu nhịp tim thu được trong 60 giây, rồi tổng hợp bằng cơ chế đồng thuận đa số (majority voting), tương tự cách một hội đồng bác sĩ cùng đọc một kết quả:</p>
+<table>
+  <tr><th>Nhóm chỉ số</th><th>Thuật toán / Phép đo</th><th>Phát hiện gì</th></tr>
+  <tr><td><strong>Độ không đều nhịp</strong></td><td>CV (Coefficient of Variation của RR intervals) · RMSSD · pNN50</td><td>Tim có đập đều không? CV &gt;15% = bắt đầu có dấu hiệu không đều</td></tr>
+  <tr><td><strong>Phổ tần số</strong></td><td>FFT (Fast Fourier Transform) · phân tích LF/HF ratio</td><td>Tìm "tần số chủ đạo" của tim — AFib không có tần số chủ đạo rõ ràng</td></tr>
+  <tr><td><strong>Entropy nhịp</strong></td><td>Sample Entropy (SampEn) · Approximate Entropy</td><td>Đo mức độ ngẫu nhiên của chuỗi nhịp — AFib có entropy rất cao</td></tr>
+  <tr><td><strong>Khoảng RR</strong></td><td>SDNN · Mean RR · phân phối histogram RR</td><td>Phân tích biên độ và phân bố khoảng cách giữa các nhịp đập</td></tr>
+  <tr><td><strong>Đồng thuận đa thuật toán</strong></td><td>6 phương pháp BPM độc lập (FFT, ACF, Peak Detection, CHROM, POS, Kalman)</td><td>≥3/6 phương pháp đồng ý → kết quả đáng tin cậy; nếu phân kỳ &gt;12 BPM → từ chối kết quả</td></tr>
+</table>
+
+<h4>📐 Công thức tính AFib Index — Bước tính cụ thể</h4>
+<p>AFib Index là điểm tổng hợp từ 0–95, được tính theo các bước:</p>
+<table>
+  <tr><th>Bước</th><th>Phép tính</th><th>Đóng góp vào điểm</th></tr>
+  <tr><td>1</td><td>CV = (SDNN / Mean RR) × 100</td><td>Mỗi 1% CV vượt ngưỡng 10% → +3 điểm</td></tr>
+  <tr><td>2</td><td>pNN50 = tỷ lệ cặp RR lệch nhau &gt;50ms</td><td>pNN50 &gt;40% → +10 điểm</td></tr>
+  <tr><td>3</td><td>SampEn &gt; 1.5 (nhịp quá ngẫu nhiên)</td><td>+15 điểm</td></tr>
+  <tr><td>4</td><td>FFT không có đỉnh tần số tim rõ ràng</td><td>+20 điểm</td></tr>
+  <tr><td>5</td><td>Histogram RR phân tán rộng (không có đỉnh tập trung)</td><td>+10 điểm</td></tr>
+  <tr><td>6</td><td>Đồng thuận BPM thấp (&lt;3/6 method đồng ý)</td><td>+10 điểm</td></tr>
+  <tr><td>7</td><td>Bonus nếu Stroke Risk &gt;35% đồng thời AFib Index trung gian</td><td>+5–10 điểm bổ sung</td></tr>
+</table>
+<div class="fd-hl">🧮 Điểm cuối: 0–24 = Bình thường · 25–54 = Cần theo dõi · 55–95 = Nghi ngờ AFib. Hệ thống <strong>không báo kết quả</strong> nếu chất lượng tín hiệu &lt;50% hoặc thời gian đo &lt;30 giây — thà không có số còn hơn có số sai.</div>
+
+<h4>🎯 Tại sao không chỉ dùng BPM để kết luận?</h4>
+<p>BPM (nhịp tim trung bình) chỉ cho biết tim đập nhanh hay chậm — không nói được tim có đập <em>đều</em> không. Người AFib có thể có BPM bình thường 70–80 mà vẫn đang rung nhĩ, vì thất vẫn co bóp đủ lần — chỉ là không đều. HeartSense phân tích <strong>khoảng cách giữa từng nhịp đập (RR intervals)</strong>, không chỉ đếm số nhịp — đây là điểm khác biệt cơ bản so với đồng hồ thông thường hay máy đo mạch đơn giản.</p>
+<table>
+  <tr><th>Phương pháp</th><th>Chỉ số đo</th><th>Phát hiện AFib?</th></tr>
+  <tr><td>Đồng hồ thể thao thông thường</td><td>BPM trung bình</td><td>❌ Không — chỉ đếm nhịp</td></tr>
+  <tr><td>Máy đo huyết áp tự động</td><td>BPM + systolic/diastolic</td><td>⚠️ Một số mẫu cao cấp có cảnh báo AFib cơ bản</td></tr>
+  <tr><td>ECG 1 chuyển đạo (Apple Watch, KardiaMobile)</td><td>Sóng điện tim trực tiếp</td><td>✅ Tốt — tiêu chuẩn vàng điện tử tiêu dùng</td></tr>
+  <tr><td><strong>HeartSense PPG đa thuật toán</strong></td><td>RR intervals + 17 chỉ số thống kê</td><td>✅ Tốt cho sàng lọc — không cần điện cực, không cần thiết bị</td></tr>
+</table>
+
+<h4>📊 Ngưỡng chi tiết từng chỉ số</h4>
+<table>
+  <tr><th>Chỉ số</th><th>Bình thường</th><th>Cần theo dõi</th><th>Nghi ngờ AFib</th></tr>
+  <tr><td>AFib Index</td><td>0–24</td><td>25–54</td><td>≥55</td></tr>
+  <tr><td>CV (RR)</td><td>&lt;10%</td><td>10–20%</td><td>&gt;20%</td></tr>
+  <tr><td>SDNN</td><td>50–100ms</td><td>30–50ms hoặc &gt;120ms</td><td>&lt;20ms hoặc không nhất quán</td></tr>
+  <tr><td>HRV Score</td><td>&gt;70</td><td>40–70</td><td>&lt;40 kết hợp nhịp loạn</td></tr>
+  <tr><td>Stroke Risk</td><td>&lt;20%</td><td>20–39%</td><td>≥40%</td></tr>
+  <tr><td>BPM</td><td>50–100</td><td>&lt;50 hoặc &gt;100</td><td>&lt;40 hoặc &gt;150 (tachyarrhythmia)</td></tr>
+</table>
+<div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
+• Task Force HRV Standards ESC/NASPE (1996) — <i>Tiêu chuẩn quốc tế cho đo lường HRV. Định nghĩa SDNN, RMSSD, pNN50 được toàn thế giới dùng</i><br>
+• Larburu et al. Computers in Biology and Medicine (2011) — <i>Thuật toán phát hiện AFib từ RR interval bằng entropy và thống kê — nền tảng của AFib Index trong HeartSense</i><br>
+• Moody &amp; Mark, CinC (1983) — <i>MIT-BIH Atrial Fibrillation Database — cơ sở dữ liệu chuẩn vàng để validate thuật toán phát hiện AFib toàn cầu</i><br>
+• Tateno &amp; Glass, Annals of Biomedical Engineering (2001) — <i>Phương pháp phát hiện AFib dựa trên phân tích thống kê RR intervals — độ nhạy 94.4%, độ đặc hiệu 97.2% trên MIT-BIH database</i><br>
+• ESC Guidelines 2020 — Atrial Fibrillation — <i>Hướng dẫn chuẩn vàng chẩn đoán và phân loại AFib của Hội Tim mạch Châu Âu</i><br>
+• Wolf et al. Stroke (1991) — <i>Framingham Heart Study — nghiên cứu dài hạn 30 năm chứng minh AFib làm tăng nguy cơ đột quỵ 5 lần</i></div>`,
+
 /* ③ PHÁT HIỆN AFIB ★ PRIORITY */
 'fd-afib': `
 <p class="fd-intro">👉 Sau 60 giây đo, HeartSense cho biết nhịp tim của bạn đang ở trạng thái nào: Bình thường, Cần theo dõi, hay Nghi ngờ Rung nhĩ. Điều này quan trọng vì rung nhĩ làm cho buồng trên của tim co bóp hỗn loạn 350–600 lần/phút thay vì 60–100 lần bình thường, dẫn đến nguy cơ đột quỵ rất cao.</p>
@@ -4014,6 +4079,19 @@
         var block = makeDetailBlock('fd-measurement-main', FD['fd-measurement']);
         var coachGrid = sec.querySelector('.coach-grid');
         if (coachGrid) coachGrid.before(block); else sec.appendChild(block);
+      })();
+
+      /* Result-card: inject classification detail block below section-head */
+      (function(){
+        var badge = document.getElementById('riskBadge');
+        if (!badge || !FD['fd-classification']) return;
+        var resultCard = badge.closest('section.result-card, section.card');
+        if (!resultCard) return;
+        var sectionHead = resultCard.querySelector('.section-head');
+        if (!sectionHead) return;
+        var block = makeDetailBlock('fd-classification-main', FD['fd-classification']);
+        block.style.marginTop = '0';
+        sectionHead.after(block);
       })();
 
       /* Auth section: 3 forms are not articles — inject separately */
