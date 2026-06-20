@@ -1288,6 +1288,9 @@
     .hs-fd-panel .fd-hl { background:#fef9c3; border-left:3px solid #f59e0b; padding:8px 12px; border-radius:0 8px 8px 0; margin:8px 0; font-weight:600; }
     .hs-fd-panel .fd-src { font-size:11px; color:#64748b; margin-top:10px; padding-top:8px; border-top:1px dashed #cbd5e1; }
     .hs-fd-panel .fd-intro { background:#eff6ff; border-left:4px solid #3b82f6; padding:10px 14px; border-radius:0 10px 10px 0; margin:0 0 14px 0; font-size:14px; line-height:1.7; color:#1e3a5f; font-weight:500; }
+    .hs-fd-panel .fd-qa { margin-top:16px; border-top:2px dashed #e2e8f0; padding-top:12px; }
+    .hs-fd-panel .fd-q { font-weight:700; color:#1e40af; margin:12px 0 3px; font-size:13px; background:#eff6ff; padding:6px 10px; border-radius:6px; }
+    .hs-fd-panel .fd-a { margin:0 0 4px 0; padding:8px 12px; background:#f8fafc; border-left:3px solid #3b82f6; border-radius:0 6px 6px 0; font-size:13px; line-height:1.7; color:#374151; }
     .hs-fd-panel table { width:100%; border-collapse:collapse; margin:8px 0; }
     .hs-fd-panel th { background:#e0f2fe; color:#0369a1; padding:6px 10px; font-size:12px; text-align:left; }
     .hs-fd-panel td { padding:5px 10px; border-bottom:1px solid #f1f5f9; font-size:12px; vertical-align:top; }
@@ -1343,12 +1346,6 @@
   <tr><td><strong>Nhược điểm</strong></td><td>Cần đứng yên 60 giây, phụ thuộc tay ấm</td><td>Cần ánh sáng ổn định, chịu ảnh hưởng của chuyển động đầu</td></tr>
 </table>
 
-<p>Camera điện thoại ngày nay có tần số 30–60 fps và cảm biến màu nhạy cỡ micromet — đủ để bắt sự thay đổi độ sáng pixel do nhịp tim gây ra. Công nghệ PPG (Photoplethysmography) đã được dùng trong máy đo SpO2 bệnh viện từ 1972. Apple Watch, Garmin, Fitbit đều dùng PPG bằng đèn LED — HeartSense làm điều tương tự bằng đèn flash và camera đã có sẵn trong điện thoại.</p>
-<p>Chế độ ngón trỏ đạt ±3–5 BPM so với ECG chuẩn vàng — tương đương Apple Watch Series 9. Chế độ khuôn mặt đạt ±5–8 BPM, đủ cho sàng lọc AFib. Điều quan trọng: HeartSense <strong>từ chối báo kết quả</strong> khi chất lượng tín hiệu dưới 50% hoặc các thuật toán không đồng thuận — tư duy y tế, không phải tư duy điện tử tiêu dùng.</p>
-<p>Phát hiện AFib cần ít nhất 30–60 giây dữ liệu RR interval liên tục theo hướng dẫn ESC/AHA 2023. Dưới 30 giây: không đủ chu kỳ nhịp để tính SDNN, RMSSD, pNN50 đáng tin cậy. 60 giây cho phép phát hiện AFib từng cơn ngay cả khi nó chỉ xuất hiện trong 20–30 giây đầu hoặc cuối lần đo.</p>
-<p>HeartSense chạy 6 thuật toán BPM song song. Nếu chênh lệch giữa các kết quả vượt 12 BPM — tức là các phương pháp không đồng thuận — hệ thống từ chối thay vì báo một con số không đáng tin. Nguyên nhân phổ biến: tay lạnh (co mạch), ngón không che kín đèn flash, rung tay nhiều, ánh sáng bên ngoài lọt vào. Làm ấm tay và đo lại là giải pháp hiệu quả nhất.</p>
-<p>Ngón trỏ chính xác hơn vì tín hiệu mạnh hơn (mao mạch dày, đèn flash chủ động). Khuôn mặt tiện hơn (không cần chạm điện thoại) nhưng nhạy cảm với ánh sáng phòng và chuyển động đầu. Khuyến nghị: dùng ngón trỏ khi cần kết quả AFib chính xác (đặc biệt trong lịch Holter 7 ngày), dùng khuôn mặt khi đang làm việc và chỉ muốn theo dõi nhẹ.</p>
-
 
 <h4>🧮 8 Thuật toán xử lý tín hiệu — Tại sao cần nhiều đến vậy?</h4>
 <p>Camera chỉ ghi được pixel RGB thô. Tín hiệu tim bị chôn vùi trong vô số nhiễu: rung tay, thay đổi ánh sáng, nhịp thở, nhiệt độ. Cần 8 lớp xử lý để lọc ra tín hiệu tim thuần túy:</p>
@@ -1400,7 +1397,26 @@
 • de Haan &amp; Jeanne (2013) IEEE TBME — <i>IEEE TBME (Transactions on Biomedical Engineering): tạp chí Kỹ thuật Y sinh hàng đầu của IEEE. Công bố thuật toán CHROM — chuẩn vàng rPPG mà HeartSense đang dùng</i><br>
 • Wang et al. (2017) IEEE TBME — <i>Thuật toán POS (Plane Orthogonal to Skin) cải tiến CHROM, tăng độ chính xác trong điều kiện ánh sáng thay đổi</i><br>
 • Allen (2007) Physiol Meas PPG review — <i>Physiol Meas (Physiological Measurement): tạp chí Đo lường Sinh lý học. Bài tổng quan toàn diện nhất về kỹ thuật PPG</i><br>
-• Bent et al. (2020) npj Digital Medicine — <i>npj Digital Medicine: tạp chí Y học Số của tập đoàn Nature. Đánh giá độ chính xác PPG so với thiết bị y tế chuẩn vàng</i></div>`,
+• Bent et al. (2020) npj Digital Medicine — <i>npj Digital Medicine: tạp chí Y học Số của tập đoàn Nature. Đánh giá độ chính xác PPG so với thiết bị y tế chuẩn vàng</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Camera điện thoại bình thường có đủ để đo tim không, hay cần camera đặc biệt?</p>
+<p class="fd-a">✅ Camera 12MP trở lên và tốc độ 30fps là đủ — đây là cấu hình cơ bản của mọi smartphone từ 2016 trở đi. HeartSense không cần camera đặc biệt. Đèn flash là yếu tố quan trọng hơn độ phân giải — nó chiếu sáng ngón tay để PPG hoạt động. Điện thoại không có đèn flash (tablet, máy tính) chỉ dùng được chế độ khuôn mặt.</p>
+<p class="fd-q">❓ Đo 60 giây có vẻ lâu. Tôi có thể đo ngắn hơn không?</p>
+<p class="fd-a">✅ 30 giây là tối thiểu để tính HRV đáng tin cậy — nhưng 60 giây cho phép phát hiện AFib từng cơn ngắn và tăng độ chính xác BPM. Nếu không đủ kiên nhẫn, đo 30 giây sẽ cho BPM nhưng không đủ để tính AFib Index và HRV đầy đủ. Khuyến nghị: kiên trì 60 giây — tương đương thời gian xem 1 quảng cáo YouTube.</p>
+<p class="fd-q">❓ Tay tôi hay lạnh, kết quả có bị ảnh hưởng không?</p>
+<p class="fd-a">✅ Có — tay lạnh gây co mạch ngoại vi, làm tín hiệu PPG yếu hơn đáng kể. Giải pháp: chà tay vào nhau 30 giây, xoa ấm dưới nước ấm, hoặc đeo tất tay vài phút trước khi đo. HeartSense sẽ báo "chất lượng tín hiệu thấp" khi tay lạnh — đây là cơ chế bảo vệ, không phải lỗi.</p>
+<p class="fd-q">❓ Tại sao cần 6 thuật toán? Một thuật toán tốt không đủ sao?</p>
+<p class="fd-a">✅ Mỗi thuật toán hoạt động tốt trong điều kiện khác nhau: FFT tốt khi nhịp đều, Peak Detection tốt khi nhịp rõ, CHROM tốt khi ánh sáng thay đổi... Không có thuật toán nào tốt trong mọi điều kiện. Chạy 6 song song rồi lấy trung vị của những thuật toán đồng ý nhau là cách giảm lỗi hiệu quả nhất — giống như hỏi 6 bác sĩ thay vì 1.</p>
+<p class="fd-q">❓ HeartSense khác gì với Apple Watch khi đo tim?</p>
+<p class="fd-a">✅ Apple Watch dùng đèn LED xanh lá nhỏ + cảm biến bên dưới đồng hồ, đo liên tục thụ động. HeartSense dùng đèn flash và camera điện thoại, đo chủ động 60 giây. Apple Watch thuận tiện hơn (tự động). HeartSense có ưu điểm: miễn phí, phân tích sâu hơn (17 chỉ số AFib), và đo khuôn mặt không cần chạm. Hai thiết bị bổ sung nhau tốt hơn thay thế nhau.</p>
+<p class="fd-q">❓ Kết quả của tôi hiển thị "Từ chối kết quả — đo lại". Tôi làm gì sai?</p>
+<p class="fd-a">✅ Từ chối kết quả không phải lỗi của bạn — là hệ thống hoạt động đúng. Nguyên nhân phổ biến: (1) Tay lạnh/co mạch, (2) Ánh sáng mạnh bên ngoài lọt vào khe giữa ngón và camera, (3) Rung tay trong khi đo, (4) Pin thấp làm đèn flash yếu hơn. Thử: tìm góc tối, che kín hoàn toàn, giữ tay thật yên. 9/10 lần thử lại trong điều kiện tốt hơn sẽ có kết quả.</p>
+<p class="fd-q">❓ Chế độ khuôn mặt có thể đo khi đeo kính không?</p>
+<p class="fd-a">✅ Kính thông thường không ảnh hưởng vì camera đo vùng da trán và má, không phải mắt. Kính mát hoặc kính chống nắng có thể gây phản xạ ánh sáng ảnh hưởng đến vùng da gần mắt — nên tháo ra khi đo khuôn mặt để kết quả tốt hơn.</p>
+<p class="fd-q">❓ Tôi có thể đo cho người cao tuổi không biết dùng điện thoại không?</p>
+<p class="fd-a">✅ Có — người thân có thể cầm điện thoại và đặt vào ngón tay của người cần đo. Kết quả vẫn chính xác miễn là ngón tay người được đo che kín camera và đèn flash. Nhiều gia đình dùng HeartSense theo cách này để theo dõi bố mẹ cao tuổi hàng ngày.</p>
+</div>`,
 
 /* ② KẾT QUẢ TỨC THÌ ★ PRIORITY */
 'fd-results': `
@@ -1444,12 +1460,6 @@
 </table>
 <div class="fd-hl">📌 HRV được ESC và NASA dùng để đánh giá nguy cơ tim mạch từ năm 1996. Người AFib hoặc suy tim thường có HRV Score dưới 30 liên tục nhiều ngày.</div>
 
-<p>BPM chỉ nói tim đập nhanh hay chậm — không nói có đập đều không. Người AFib có thể có BPM bình thường 75 mà vẫn đang rung nhĩ. HRV Score đo tính đều đặn. Stroke Risk tổng hợp nguy cơ lâu dài. AFib Index đo mức độ loạn nhịp hiện tại. Bốn chỉ số này bổ trợ nhau — không có chỉ số nào đứng độc lập đủ để kết luận sức khỏe tim.</p>
-<p>Stroke Risk kết hợp CHA₂DS₂-VASc (tuổi, giới, bệnh nền) với kết quả đo thực tế (AFib Index, HRV). Đây là thang điểm lâm sàng được ESC/AHA dùng toàn cầu để quyết định điều trị chống đông cho bệnh nhân AFib. HeartSense cá nhân hóa thêm bằng dữ liệu đo của người dùng — không phải con số ngẫu nhiên.</p>
-<p>HRV Score &gt;70: tim ổn định, hệ thần kinh tự chủ hoạt động tốt. 40–70: cần theo dõi. &lt;40 kèm nhịp loạn: dấu hiệu cần chú ý. Quan trọng: HRV thay đổi theo tuổi (người 70 tuổi HRV bình thường là 30–50, không phải 70+), sau vận động, và sau đêm ngủ kém. Đừng lo lắng vì 1 lần HRV thấp — theo dõi xu hướng qua nhiều ngày mới có ý nghĩa.</p>
-<p>Không. AFib Index 25–54 chỉ nghĩa là "có một số dấu hiệu cần theo dõi thêm" — chưa đủ để kết luận AFib. Nhiều nguyên nhân làm AFib Index tăng nhẹ mà không phải AFib: stress, caffeine, mất ngủ, vận động ngay trước khi đo, hoặc đơn giản là tay hơi rung khi đo. Đo lại 2–3 lần trong ngày — nếu liên tục &gt;55 thì mới nên đi khám ECG.</p>
-<p>Nhịp tim và HRV thay đổi liên tục theo hoạt động, cảm xúc, hydration, thời điểm trong ngày. Đây là sinh lý học bình thường — không phải lỗi của ứng dụng. Đo sáng sớm trước khi ra giường cho kết quả "baseline" ổn định nhất. Sự thay đổi trong ngày ±10 BPM và ±15 HRV điểm là hoàn toàn bình thường.</p>
-
 
 <h4>⚡ Chỉ số 3: Stroke Risk % — Nguy cơ đột quỵ tổng hợp</h4>
 <p><strong>Đây KHÔNG PHẢI xác suất đột quỵ hôm nay</strong> — mà là <em>chỉ số nguy cơ tương đối</em> tổng hợp từ nhiều yếu tố, xếp bạn vào nhóm nguy cơ cao/thấp. Tương đương thang CHA₂DS₂-VASc mà bác sĩ tim mạch dùng — nhưng bổ sung thêm dữ liệu PPG thực tế của bạn ngay hôm nay.</p>
@@ -1490,7 +1500,24 @@
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • Task Force HRV Standards ESC/NASPE 1996 — <i>ESC (European Society of Cardiology — Hội Tim mạch Châu Âu) &amp; NASPE (North American Society of Pacing and Electrophysiology). Tài liệu đặt ra tiêu chuẩn quốc tế cho HRV — mọi nghiên cứu HRV trên thế giới đều tham chiếu tài liệu này</i><br>
 • CHA₂DS₂-VASc Score ESC Guidelines 2020 — <i>Hướng dẫn lâm sàng ESC 2020 — hướng dẫn điều trị AFib toàn diện nhất, cập nhật mới nhất của Hội Tim mạch Châu Âu</i><br>
-• Camm et al. J Am Coll Cardiol 2018 — <i>JACC (Journal of the American College of Cardiology): tạp chí Tim mạch uy tín nhất của Mỹ, IF ~24. Prof. Camm là chuyên gia AFib hàng đầu thế giới</i></div>`,
+• Camm et al. J Am Coll Cardiol 2018 — <i>JACC (Journal of the American College of Cardiology): tạp chí Tim mạch uy tín nhất của Mỹ, IF ~24. Prof. Camm là chuyên gia AFib hàng đầu thế giới</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ BPM 75 mà AFib Index lại cao — có mâu thuẫn không?</p>
+<p class="fd-a">✅ Không mâu thuẫn chút nào. BPM đếm số lần tim đập mỗi phút — không nói tim đập CÓ ĐỀU không. Người AFib có thể có BPM 75 vì thất vẫn co bóp đủ lần, nhưng khoảng cách giữa các nhịp hoàn toàn hỗn loạn. AFib Index đo tính không đều đó. Đây là lý do tại sao đếm mạch thủ công không đủ để phát hiện AFib.</p>
+<p class="fd-q">❓ HRV Score của tôi là 45. Vậy có thấp không?</p>
+<p class="fd-a">✅ Phụ thuộc tuổi của bạn. Người 35 tuổi có HRV 45 là thấp (trung vị cùng tuổi khoảng 60–70). Người 65 tuổi có HRV 45 là bình thường (trung vị cùng tuổi khoảng 35–50). HeartSense so sánh với chuẩn dân số theo tuổi — xem mục "So sánh dân số" để biết bạn đang ở phân vị nào.</p>
+<p class="fd-q">❓ Stroke Risk 25% có nghĩa là tôi sẽ bị đột quỵ không?</p>
+<p class="fd-a">✅ Không. 25% là chỉ số rủi ro tương đối, không phải xác suất đột quỵ hôm nay. Nó có nghĩa là bạn đang ở nhóm cần theo dõi tích cực hơn — giống như cholesterol cao là yếu tố nguy cơ chứ không phải chắc chắn nhồi máu. Kiểm soát tốt huyết áp, điều trị AFib đúng cách, và thay đổi lối sống làm giảm Stroke Risk đáng kể.</p>
+<p class="fd-q">❓ Tại sao kết quả sáng và tối của tôi khác nhau nhiều vậy?</p>
+<p class="fd-a">✅ Hoàn toàn bình thường. Nhịp tim và HRV thay đổi theo nhịp sinh học (circadian rhythm): thấp nhất lúc 3–5h sáng, tăng dần khi thức dậy, cao nhất lúc chiều/tối khi hoạt động. BPM buổi sáng sớm thường thấp hơn buổi chiều 5–15 BPM. Đừng so sánh kết quả giữa các thời điểm trong ngày — so sánh cùng khung giờ giữa các ngày mới có ý nghĩa.</p>
+<p class="fd-q">❓ AFib Index 30 hôm nay, 15 ngày mai — có nên lo không?</p>
+<p class="fd-a">✅ Biến động ±15 điểm giữa các lần đo là bình thường do thay đổi trạng thái cơ thể. Điều quan trọng là xu hướng nhiều ngày, không phải con số đơn lẻ. Nếu AFib Index liên tục &gt;40 trong 3–4 ngày, hoặc đột ngột vọt lên &gt;55 — đó mới là dấu hiệu cần chú ý. Holter 7 ngày cho bức tranh chính xác hơn nhiều so với lần đo đơn lẻ.</p>
+<p class="fd-q">❓ Tôi có thể đo tim cho trẻ em không?</p>
+<p class="fd-a">✅ Về kỹ thuật có thể, nhưng các ngưỡng chuẩn của HeartSense được tối ưu cho người lớn từ 18 tuổi. Trẻ em có nhịp tim cao hơn tự nhiên (trẻ sơ sinh 120–160 BPM, trẻ 10 tuổi 70–110 BPM) — nếu dùng cho trẻ, đọc BPM thô thay vì dựa vào đánh giá màu sắc. Không dùng AFib Index của HeartSense để đánh giá trẻ em mà chưa có kiểm chứng lâm sàng ở nhóm tuổi này.</p>
+<p class="fd-q">❓ Kết quả 4 chỉ số tôi nên ưu tiên xem chỉ số nào trước?</p>
+<p class="fd-a">✅ Thứ tự ưu tiên: (1) AFib Index — nếu đỏ (&gt;55): đây là vấn đề cấp bách nhất. (2) Stroke Risk — nếu &gt;40%: cần đánh giá y tế. (3) HRV Score — phản ánh xu hướng sức khỏe dài hạn. (4) BPM — chỉ đáng lo khi &lt;40 hoặc &gt;130 khi nghỉ. Trong phần lớn trường hợp, nếu AFib Index &lt;25 và Stroke Risk &lt;20% thì mọi chỉ số khác chỉ là thông tin bổ sung.</p>
+</div>`,
 
 /* ② KẾT LUẬN TRẠNG THÁI (riskBadge) ★ PRIORITY */
 'fd-classification': `
@@ -1514,12 +1541,6 @@
   <tr><td><strong>Khoảng RR</strong></td><td>SDNN · Mean RR · phân phối histogram RR</td><td>Phân tích biên độ và phân bố khoảng cách giữa các nhịp đập</td></tr>
   <tr><td><strong>Đồng thuận đa thuật toán</strong></td><td>6 phương pháp BPM độc lập (FFT, ACF, Peak Detection, CHROM, POS, Kalman)</td><td>≥3/6 phương pháp đồng ý → kết quả đáng tin cậy; nếu phân kỳ &gt;12 BPM → từ chối kết quả</td></tr>
 </table>
-
-<p>Phát hiện AFib cần phân tích ít nhất 30–60 nhịp tim liên tiếp để tính SDNN, RMSSD và CV đáng tin cậy. Ít hơn 30 giây: quá ít RR intervals, sai số thống kê cao, dễ báo nhầm. 60 giây là thời gian tối ưu theo hướng dẫn ESC 2023 cho sàng lọc AFib bằng thiết bị cầm tay.</p>
-<p>Không nhất thiết. "Cần theo dõi" (AFib Index 25–54) có thể do stress, caffeine, mất ngủ, vừa tập thể dục, hoặc chất lượng đo không hoàn hảo. Đây là tín hiệu để <strong>đo lại sau 30 phút</strong> trong trạng thái nghỉ ngơi. Nếu badge chuyển về xanh lá → bình thường. Nếu vẫn vàng/đỏ sau 2–3 lần đo → nên tham khảo Pocket Cardiologist hoặc bác sĩ.</p>
-<p>Không có chỉ số đơn lẻ nào đủ độ nhạy và độ đặc hiệu để phát hiện AFib một mình. CV (hệ số biến thiên) tốt cho loạn nhịp rõ, nhưng bỏ sót AFib tần số thấp. Sample Entropy bắt được sự hỗn loạn, nhưng có thể báo dương tính giả khi tín hiệu nhiễu. Kết hợp 17 phép kiểm tra tạo hệ thống "hội đồng" — mỗi thành viên có điểm mạnh riêng, kết quả cuối cùng vượt trội bất kỳ cá nhân nào.</p>
-<p>Không. Badge đỏ (AFib Index ≥55) nghĩa là "nhiều dấu hiệu thống kê gợi ý loạn nhịp — cần xác nhận bằng ECG". Đây là kết quả sàng lọc, không phải chẩn đoán. Tỷ lệ false positive của HeartSense khoảng 2.8% — tức là trong 100 người badge đỏ, khoảng 3 người tim thực sự bình thường. Việc tiếp theo: giữ bình tĩnh, đo lại 1 lần, đến bác sĩ làm ECG nếu vẫn đỏ.</p>
-<p>Nhịp tim biến động tự nhiên trong ngày — đây là sinh lý học bình thường. HRV thay đổi theo nhịp thở, tư thế, cảm xúc. Kết quả có thể dao động ±10–15 điểm AFib Index giữa các lần đo liên tiếp. Điều quan trọng là <strong>xu hướng qua nhiều ngày</strong>, không phải một lần đo đơn lẻ. Holter 7 ngày cho bức tranh chính xác hơn bất kỳ lần đo đơn lẻ nào.</p>
 
 
 <h4>📐 Công thức tính AFib Index — Bước tính cụ thể</h4>
@@ -1562,7 +1583,24 @@
 • Moody &amp; Mark, CinC (1983) — <i>MIT-BIH Atrial Fibrillation Database — cơ sở dữ liệu chuẩn vàng để validate thuật toán phát hiện AFib toàn cầu</i><br>
 • Tateno &amp; Glass, Annals of Biomedical Engineering (2001) — <i>Phương pháp phát hiện AFib dựa trên phân tích thống kê RR intervals — độ nhạy 94.4%, độ đặc hiệu 97.2% trên MIT-BIH database</i><br>
 • ESC Guidelines 2020 — Atrial Fibrillation — <i>Hướng dẫn chuẩn vàng chẩn đoán và phân loại AFib của Hội Tim mạch Châu Âu</i><br>
-• Wolf et al. Stroke (1991) — <i>Framingham Heart Study — nghiên cứu dài hạn 30 năm chứng minh AFib làm tăng nguy cơ đột quỵ 5 lần</i></div>`,
+• Wolf et al. Stroke (1991) — <i>Framingham Heart Study — nghiên cứu dài hạn 30 năm chứng minh AFib làm tăng nguy cơ đột quỵ 5 lần</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ AFib Index 55 — chính xác tôi có bị rung nhĩ không?</p>
+<p class="fd-a">✅ AFib Index 55 có nghĩa là nhiều dấu hiệu thống kê gợi ý loạn nhịp — nhưng không phải chẩn đoán xác định. HeartSense là công cụ sàng lọc (screening), tiêu chuẩn vàng là ECG 12 chuyển đạo do bác sĩ đọc. Việc cần làm: đo lại 1 lần để xác nhận, sau đó đến bác sĩ làm ECG. Đừng tự kết luận hoặc tự uống thuốc chỉ dựa trên kết quả app.</p>
+<p class="fd-q">❓ Tôi cảm thấy tim đập bình thường nhưng AFib Index lại cao — có thể không?</p>
+<p class="fd-a">✅ Hoàn toàn có thể và rất phổ biến. 80% bệnh nhân AFib không có triệu chứng cảm nhận được — tim loạn nhịp bên trong mà não không "cảm thấy" gì bất thường. Đây chính là lý do AFib nguy hiểm: không đau, không khó chịu, nhưng nguy cơ đột quỵ tích lũy từng ngày. Tầm soát bằng HeartSense có giá trị chính ở điểm này.</p>
+<p class="fd-q">❓ HeartSense có phân biệt được AFib với nhịp tim nhanh thông thường không?</p>
+<p class="fd-a">✅ Có. Nhịp tim nhanh (Tachycardia) có BPM cao nhưng nhịp ĐỀU — AFib Index thường thấp. AFib có BPM có thể bình thường hoặc cao nhưng nhịp KHÔNG ĐỀU — nhiều chỉ số vượt ngưỡng cùng lúc. HeartSense phân tích khoảng cách giữa từng nhịp (RR intervals), không chỉ đếm số nhịp — đây là điểm cốt lõi giúp phân biệt.</p>
+<p class="fd-q">❓ Tôi đang dùng thuốc beta-blocker. Nó có ảnh hưởng đến kết quả phát hiện AFib không?</p>
+<p class="fd-a">✅ Beta-blocker làm chậm nhịp tim nhưng không làm mất tính không đều của AFib. Nếu bạn đang có AFib khi dùng beta-blocker, BPM có thể chỉ 60–80 nhưng AFib Index vẫn cao vì RR intervals vẫn loạn. Beta-blocker cũng làm giảm HRV score — hãy báo bác sĩ khi xem báo cáo để họ có ngữ cảnh đầy đủ.</p>
+<p class="fd-q">❓ Tôi bị PAC (nhịp ngoại tâm thu trên thất). HeartSense có nhầm với AFib không?</p>
+<p class="fd-a">✅ PAC tạo ra dấu hiệu tương tự AFib ở mức độ nhẹ — vài nhịp sớm xen kẽ nhịp bình thường. HeartSense có thuật toán phân biệt nhưng độ chính xác phân biệt PAC vs AFib kém hơn phát hiện AFib chính thức. Nếu bạn có PAC đã được chẩn đoán, hãy thông báo cho app trong phần hồ sơ để hệ thống điều chỉnh ngưỡng đánh giá.</p>
+<p class="fd-q">❓ AFib của tôi đã điều trị ablation thành công — HeartSense có ích gì không?</p>
+<p class="fd-a">✅ Rất có ích cho theo dõi tái phát sau ablation. Tỷ lệ AFib tái phát sau ablation là 20–40% trong năm đầu — nhiều cơn tái phát là AFib từng cơn không triệu chứng. Holter 7 ngày hàng tháng với HeartSense là cách rẻ nhất và thuận tiện nhất để phát hiện tái phát sớm trước khi triệu chứng xuất hiện, giúp bác sĩ điều chỉnh điều trị kịp thời.</p>
+<p class="fd-q">❓ AFib kèm huyết áp cao có nguy hiểm hơn không?</p>
+<p class="fd-a">✅ Có — đây là sự kết hợp nguy hiểm nhất. Huyết áp cao làm thành tim dày lên, tạo điều kiện thuận lợi cho AFib. AFib kết hợp với huyết áp cao làm tăng Stroke Risk gấp 3–5 lần so với chỉ có một mình AFib hoặc huyết áp cao. CHA₂DS₂-VASc Score tự động cộng thêm điểm cho huyết áp cao — vì vậy người có cả hai điều kiện thường được khuyến nghị thuốc chống đông sớm hơn.</p>
+</div>`,
 
 /* ③ PHÁT HIỆN AFIB ★ PRIORITY */
 'fd-afib': `
@@ -1603,12 +1641,6 @@
 </table>
 <p><strong>Tổng tối đa: 230 điểm.</strong> Kết luận AFib khi đồng thời thỏa: ≥75/230 điểm + thời gian đo ≥30s + ≥18 intervals RR + temporal consistency ≥40% + chất lượng tín hiệu ≥68%.</p>
 
-<p>Máy đo huyết áp thông thường chỉ đếm số nhịp đập — không phân tích khoảng cách giữa từng nhịp. Người AFib có thể có huyết áp bình thường và nhịp tim 75 mà vẫn đang rung nhĩ. HeartSense phân tích <strong>RR intervals</strong> (khoảng cách giữa từng nhịp đập) — đây là cách duy nhất phát hiện loạn nhịp mà không cần điện cực ECG.</p>
-<p>Thuật toán dựa trên nghiên cứu Tateno &amp; Glass (Annals of Biomedical Engineering, 2001) đạt độ nhạy 94.4% và độ đặc hiệu 97.2% trên MIT-BIH Atrial Fibrillation Database — cơ sở dữ liệu chuẩn vàng toàn cầu. HeartSense thêm lớp đồng thuận 6 thuật toán để giảm false positive. Kết quả "Nghi ngờ AFib" luôn kèm khuyến nghị xác nhận bằng ECG thực tế.</p>
-<p>PPG là công nghệ sàng lọc (screening), không phải chẩn đoán (diagnosis). Tiêu chuẩn vàng chẩn đoán AFib là ECG 12 chuyển đạo do bác sĩ đọc. HeartSense đóng vai trò như "báo động sớm" — phát hiện nghi ngờ để người dùng đi làm ECG xác nhận, thay vì chờ đến khi có triệu chứng nặng. Đây là thực hành đúng về mặt y đức.</p>
-<p>AFib gây ra 20–30% tổng số ca đột quỵ (Wolf et al., Framingham Study 1991). Người AFib có nguy cơ đột quỵ cao gấp 5 lần người bình thường. Nguy hiểm hơn: <strong>80% bệnh nhân AFib không biết mình có bệnh</strong> cho đến khi đột quỵ xảy ra (nguồn: ESC 2020). Phát hiện sớm + dùng thuốc chống đông đúng cách giảm nguy cơ đột quỵ xuống gần bằng người bình thường.</p>
-<p>AFib từng cơn (Paroxysmal AFib) có thể không gây triệu chứng rõ ràng — tim loạn nhịp vài phút đến vài giờ rồi tự hồi phục. Người dùng cảm thấy "bình thường" nhưng mỗi cơn AFib đều tạo nguy cơ hình thành cục máu đông trong tiểu nhĩ trái. Tầm soát định kỳ bằng HeartSense bắt được những cơn AFib ngắn này trước khi chúng gây biến cố.</p>
-
 
 <h4>🛡️ Cơ chế chống báo nhầm — Physiological Plausibility Gate</h4>
 <p>Trước khi kết luận AFib, hệ thống kiểm tra <strong>5 điều kiện sinh lý bắt buộc</strong>. Nếu bất kỳ 1 điều kiện không thỏa → TỪ CHỐI kết luận dù điểm đủ cao:</p>
@@ -1644,7 +1676,22 @@
 • Larburu et al. Comput Methods Programs Biomed 2021 — <i>Tạp chí Phương pháp Máy tính trong Y học. Thuật toán phát hiện AFib tự động từ HRV — một trong những thuật toán HeartSense tham khảo</i><br>
 • Tateno &amp; Glass Am J Physiol 2001 — <i>American Journal of Physiology: tạp chí Sinh lý học Mỹ. Nghiên cứu nền tảng về phân tích tính bất quy tắc nhịp tim để phát hiện AFib</i><br>
 • Costa, Goldberger &amp; Peng Phys Rev Lett 2002 — <i>Physical Review Letters: tạp chí Vật lý học uy tín. Công bố khái niệm Multiscale Entropy — đo độ hỗn loạn của nhịp tim, nền tảng của SampEn trong HeartSense</i><br>
-• ESC AFib Guidelines 2020 (Hindricks et al.) — <i>Hướng dẫn AFib toàn diện nhất của Hội Tim mạch Châu Âu, cập nhật 2020 — chuẩn vàng điều trị AFib toàn cầu</i></div>`,
+• ESC AFib Guidelines 2020 (Hindricks et al.) — <i>Hướng dẫn AFib toàn diện nhất của Hội Tim mạch Châu Âu, cập nhật 2020 — chuẩn vàng điều trị AFib toàn cầu</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Badge vàng "Cần theo dõi" xuất hiện sau bữa ăn — có bình thường không?</p>
+<p class="fd-a">✅ Rất bình thường. Sau bữa ăn lớn, máu dồn về hệ tiêu hóa làm tim đập nhanh hơn 10–15 BPM (Postprandial Tachycardia) và HRV giảm nhẹ. Đây không phải AFib mà là phản ứng sinh lý bình thường. Đo lại sau 30–60 phút sau bữa ăn khi cơ thể đã ổn định.</p>
+<p class="fd-q">❓ Badge đỏ lần đầu tiên — tôi phải làm gì ngay bây giờ?</p>
+<p class="fd-a">✅ Bình tĩnh — badge đỏ lần đầu không tự động kích hoạt SOS. Hệ thống cần xác nhận 2 lần liên tiếp. Việc của bạn: (1) Ngồi xuống, thở đều, (2) Đo lại sau 10–15 phút, (3) Nếu lần hai vẫn đỏ → hệ thống sẽ gợi ý SOS, lúc đó mới cần hành động. Nếu lần hai xanh → lần đầu có thể là nhiễu hoặc bạn vừa vận động mạnh.</p>
+<p class="fd-q">❓ HeartSense có thể nhầm badge đỏ với người tim bình thường không?</p>
+<p class="fd-a">✅ Có thể, nhưng hiếm. Tỷ lệ false positive khoảng 2–3%. Các tình huống hay gây badge đỏ nhầm: vừa tập thể dục xong 30 phút, uống nhiều cà phê, mất ngủ nặng, hoặc đo khi tay rung nhiều. Cơ chế "xác nhận kép" (cần 2 lần đỏ liên tiếp) giảm false positive xuống dưới 1% trong thực tế. ECG là cách duy nhất xác nhận chắc chắn.</p>
+<p class="fd-q">❓ Tôi đã được bác sĩ xác nhận AFib — badge HeartSense có luôn đỏ không?</p>
+<p class="fd-a">✅ Không nhất thiết, vì badge dựa trên kết quả đo thực tế lúc đó. Nếu bạn đang uống thuốc rate control hiệu quả và tim đang về nhịp xoang → badge có thể xanh. Badge đỏ chỉ xuất hiện khi cơn AFib đang hoạt động trong lúc đo. Điều này có giá trị: bạn biết thuốc có đang kiểm soát được AFib không.</p>
+<p class="fd-q">❓ Badge xanh liên tục 2 tuần — tôi có thể ngừng theo dõi không?</p>
+<p class="fd-a">✅ Không nên ngừng, đặc biệt nếu bạn có tiền sử AFib hoặc bệnh tim. AFib từng cơn có thể vắng mặt 2 tuần rồi xuất hiện đột ngột. Theo dõi đều đặn theo lịch Holter là cách duy nhất bắt được AFib khi nó xuất hiện. Badge xanh liên tục là tin tốt — nhưng không phải lý do để bỏ lịch đo.</p>
+<p class="fd-q">❓ Tôi có thể chia sẻ kết quả badge cho bác sĩ không?</p>
+<p class="fd-a">✅ Có — xuất báo cáo 7 ngày qua mục "Xuất báo cáo bác sĩ". Báo cáo hiển thị biểu đồ badge theo thời gian, kèm AFib Index và các chỉ số HRV. Nhiều bác sĩ tim mạch đã quen đọc dữ liệu từ Apple Watch — báo cáo HeartSense theo format tương tự, dễ đọc và có giải thích bằng tiếng Việt.</p>
+</div>`,
 
 /* ④ POCKET CARDIOLOGIST ★ PRIORITY */
 'fd-pocket-cardio': `
@@ -1660,12 +1707,6 @@
   <tr><td><strong>Lớp 2: Fallback rule-based</strong></td><td>Khi Gemini lỗi hoặc không có mạng</td><td>Bộ 50+ câu hỏi thường gặp đã được lập trình sẵn với câu trả lời y tế chuẩn</td><td>Luôn có câu trả lời ngay cả offline, không bao giờ để người dùng không có thông tin</td></tr>
   <tr><td><strong>Lớp 3: Text-to-Speech tiếng Việt</strong></td><td>Mọi câu trả lời</td><td>Web Speech API đọc to câu trả lời bằng giọng Việt — người dùng không cần đọc màn hình</td><td>Tiếp cận được người cao tuổi, người thị lực kém, hoặc khi đang lái xe</td></tr>
 </table>
-
-<p>ChatGPT không biết kết quả đo của bạn — nó trả lời câu hỏi y tế chung chung. Pocket Cardiologist nhận được toàn bộ context: BPM, HRV, Stroke Risk, AFib Index, tuổi, bệnh nền của bạn lúc đó. Câu trả lời là "Với BPM 88, HRV 42, AFib Index 31 của bạn lúc 22h tối..." — không phải "nhịp tim bình thường là 60–100".</p>
-<p>Không — và không nên cố gắng như vậy. Pocket Cardiologist được thiết kế để: (1) giải thích kết quả đo bằng ngôn ngữ dễ hiểu, (2) tư vấn khi nào cần đi khám, (3) trả lời câu hỏi lúc 3 giờ sáng khi không gọi được bác sĩ. Với quyết định điều trị như dùng thuốc, liều lượng, phẫu thuật — luôn cần bác sĩ thật.</p>
-<p>AI được prompt với vai trò "bác sĩ tim mạch chuyên khoa 2, 20 năm kinh nghiệm" và được cấp dữ liệu kết quả đo thực tế. Ngôn ngữ Việt giúp người cao tuổi và người không rành tiếng Anh hiểu trực tiếp. Mọi câu trả lời đều kèm disclaimer về giới hạn của AI và khuyến nghị xác nhận với bác sĩ khi cần thiết.</p>
-<p>AI không bị mệt vì đây là mô hình ngôn ngữ chạy trên server cloud, không phải con người. Nhưng AI có giới hạn: không nhìn được bạn, không nghe tim, không làm xét nghiệm. "Lỗi" của AI là đưa ra câu trả lời nghe có vẻ hợp lý nhưng thiếu thông tin y tế quan trọng mà chỉ khám trực tiếp mới biết. Dùng AI như "tư vấn sơ bộ", không phải "chẩn đoán cuối cùng".</p>
-<p>Cuộc hội thoại được gửi lên API của Google Gemini để xử lý và trả lời. HeartSense không lưu nội dung câu hỏi/trả lời lâu dài trên server — chỉ lưu kết quả đo tim. Không nên nhập thông tin nhận dạng cá nhân nhạy cảm (CMND, số tài khoản) vào cửa sổ chat.</p>
 
 
 <h4>💬 Các câu hỏi thực tế bạn có thể hỏi</h4>
@@ -1690,7 +1731,24 @@
 <div class="fd-hl">🕐 Sẵn sàng 24/7, không cần đặt lịch, không phí khám — giải quyết đúng vấn đề "3 giờ sáng tim đập loạn mà không biết hỏi ai và không muốn đánh thức con cái".</div>
 <div class="fd-src">📚 <b>Nền tảng công nghệ:</b><br>
 • Google Gemini API (gemini-pro) — <i>Mô hình AI ngôn ngữ lớn (LLM) của Google, được huấn luyện trên tài liệu y khoa khổng lồ. Cung cấp khả năng trả lời câu hỏi y tế thông minh cho Pocket Cardiologist</i><br>
-• Web Speech API SpeechSynthesis — <i>Tiêu chuẩn Web W3C cho phép trình duyệt đọc văn bản thành giọng nói. HeartSense dùng để đọc kết quả bằng tiếng Việt cho người dùng cao tuổi</i></div>`,
+• Web Speech API SpeechSynthesis — <i>Tiêu chuẩn Web W3C cho phép trình duyệt đọc văn bản thành giọng nói. HeartSense dùng để đọc kết quả bằng tiếng Việt cho người dùng cao tuổi</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Pocket Cardiologist có thể kê đơn thuốc hoặc thay đổi liều thuốc không?</p>
+<p class="fd-a">✅ Không — và đây là thiết kế có chủ ý, không phải giới hạn kỹ thuật. AI không bao giờ đề xuất tên thuốc cụ thể, liều lượng, hoặc thay đổi phác đồ điều trị. Những quyết định đó cần bác sĩ biết đầy đủ bệnh sử, tiền sử dị ứng, tương tác thuốc — thông tin mà AI không có. Pocket Cardiologist giải thích kết quả và tư vấn khi nào cần gặp bác sĩ, không thay thế bác sĩ.</p>
+<p class="fd-q">❓ AI có biết lịch sử đo tim của tôi nhiều tuần trước không?</p>
+<p class="fd-a">✅ Có — mỗi cuộc hội thoại được cấp toàn bộ context: kết quả đo hiện tại, lịch sử 7–30 ngày gần nhất, baseline cá nhân, tuổi, giới tính, bệnh nền đã nhập. Điều này cho phép AI nhận ra "AFib Index của bạn đang tăng dần tuần này" hoặc "HRV của bạn thấp hơn 30% so với baseline" — câu trả lời cá nhân hóa thực sự, không phải thông tin chung chung.</p>
+<p class="fd-q">❓ Nếu không có mạng, tôi có vẫn được tư vấn không?</p>
+<p class="fd-a">✅ Có — Lớp 2 (Fallback rule-based) hoạt động hoàn toàn offline. Hệ thống có 50+ câu hỏi thường gặp được lập trình sẵn với câu trả lời y tế chuẩn. Offline, câu trả lời sẽ ít cá nhân hóa hơn nhưng vẫn đúng về mặt y khoa. Khi có mạng lại, Gemini AI tự động kích hoạt với đầy đủ ngữ cảnh.</p>
+<p class="fd-q">❓ AI có thể sai không? Tôi nên tin bao nhiêu %?</p>
+<p class="fd-a">✅ AI có thể sai — không phải vì nó cố tình, mà vì AI không biết thông tin quan trọng bạn chưa nói ra (bệnh nền, thuốc đang dùng, tiền sử phẫu thuật). Nên tin tưởng AI ở mức "tư vấn sơ bộ 24/7" — hữu ích để hiểu kết quả và quyết định có cần gặp bác sĩ không, không phải để thay thế chẩn đoán bác sĩ. Khi có nghi ngờ, luôn ưu tiên ý kiến bác sĩ.</p>
+<p class="fd-q">❓ Thông tin tôi hỏi có được lưu trữ và chia sẻ không?</p>
+<p class="fd-a">✅ Nội dung hội thoại được gửi lên Google Gemini API để xử lý và không được HeartSense lưu trữ lâu dài. Google tuân thủ GDPR và chính sách bảo mật nghiêm ngặt. Tránh nhập thông tin nhận dạng cá nhân nhạy cảm (số CCCD, tài khoản ngân hàng) vào chat — chỉ chia sẻ thông tin y tế cần thiết để nhận tư vấn tốt hơn.</p>
+<p class="fd-q">❓ Tôi có thể hỏi AI về kết quả của người thân không?</p>
+<p class="fd-a">✅ Có — nhiều người dùng hỏi thay cho bố mẹ cao tuổi. Cung cấp tuổi, giới tính, bệnh nền và kết quả đo cụ thể để AI trả lời chính xác nhất. Ví dụ: "Mẹ tôi 70 tuổi, có AFib đã chẩn đoán, đang dùng Warfarin. Hôm nay AFib Index 42. Có đáng lo không?" — AI sẽ trả lời với đầy đủ ngữ cảnh đó.</p>
+<p class="fd-q">❓ AI có thể giải thích kết quả bằng ngôn ngữ đơn giản cho người không hiểu y khoa không?</p>
+<p class="fd-a">✅ Đây chính là điểm mạnh nhất của Pocket Cardiologist. AI được prompt để tránh thuật ngữ y khoa phức tạp khi không cần thiết. Thay vì "SDNN của bạn là 42ms, thấp hơn 1 độ lệch chuẩn so với chuẩn dân số" → AI sẽ nói "Tim của bạn đang hơi căng thẳng — giống như bạn đang chạy bộ nhẹ trong đầu, cần nghỉ ngơi thêm".</p>
+</div>`,
 
 /* ⑤ SOS + GUARDIAN ★ PRIORITY */
 'fd-sos': `
@@ -1713,12 +1771,6 @@
   <tr><td>Phát hiện ngã</td><td>Gia tốc kế điện thoại: đột biến &gt;25m/s² → im lặng 3 giây</td><td>🟠 Cao — người dùng có thể đã ngã bất tỉnh</td></tr>
   <tr><td>Người dùng tự nhấn</td><td>Nhấn nút "Kích hoạt SOS ngay" trong app</td><td>🔴 Ưu tiên tuyệt đối — không hỏi thêm</td></tr>
 </table>
-
-<p>Gửi ngay tức thì gây hoảng loạn không cần thiết khi false positive (kết quả sai). Người vừa chạy bộ, cầm điện thoại run tay khi đo sẽ có kết quả báo "nguy hiểm" nhưng thực ra bình thường. 15 giây đủ để người tỉnh táo bấm Hủy — đủ ngắn để không mất thời gian khi thực sự cần cấp cứu. Đây là cân bằng tối ưu giữa false positive và false negative trong cấp cứu y tế.</p>
-<p>(1) <strong>Âm thanh báo động</strong>: đánh thức người gần nhất trong nhà. (2) <strong>Email đến người thân</strong>: hoạt động kể cả khi người thân đang làm việc, không nhìn điện thoại. (3) <strong>Push notification</strong>: đến điện thoại người thân dù app đã đóng, ngay cả khi điện thoại đang khóa màn hình. Ba kênh độc lập đảm bảo ít nhất 1 kênh hoạt động dù mạng yếu hay người thân không check điện thoại thường xuyên.</p>
-<p>Không. Người thân nhận cảnh báo qua email và push notification trình duyệt — không cần cài app. Họ chỉ cần có email hoặc điện thoại có kết nối internet. Dashboard theo dõi của người giám hộ cũng là trang web, mở được trên bất kỳ trình duyệt nào.</p>
-<p>Khi AFib Index vượt ngưỡng nguy hiểm hoặc Shock Index &gt;1.0, hệ thống <strong>tự động</strong> đếm ngược 15 giây mà không cần người dùng làm gì. Nếu không có ai bấm Hủy trong 15 giây, SOS tự gửi. Đây là lý do tại sao tính năng này có giá trị đặc biệt với người cao tuổi sống một mình — không cần làm gì, hệ thống tự hành động.</p>
-<p>Hiện tại SOS không tự gọi 115 (cần cấp phép đặc biệt từ Bộ Y tế). Thay vào đó, HeartSense cung cấp nút "Gọi 115" một chạm trên màn hình SOS và gửi thông tin vị trí cho người thân để họ gọi thay. Tính năng tự động gọi 115 là mục tiêu phát triển trong phiên bản sau.</p>
 
 
 <h4>⏱️ Quy trình 15 giây — Thiết kế thông minh</h4>
@@ -1754,7 +1806,24 @@
 <div class="fd-src">📚 <b>Nền tảng công nghệ:</b><br>
 • Geolocation API — <i>Tiêu chuẩn Web W3C cho phép ứng dụng trình duyệt đọc vị trí GPS của thiết bị. HeartSense dùng để gửi tọa độ chính xác đến người giám hộ khi SOS</i><br>
 • Web Push Notifications API — <i>Tiêu chuẩn Web cho phép gửi thông báo đẩy đến trình duyệt ngay cả khi không mở app. Đảm bảo người giám hộ nhận cảnh báo SOS lập tức</i><br>
-• Nodemailer — <i>Thư viện Node.js mã nguồn mở để gửi email tự động. HeartSense dùng để gửi email cảnh báo SOS đến người giám hộ</i></div>`,
+• Nodemailer — <i>Thư viện Node.js mã nguồn mở để gửi email tự động. HeartSense dùng để gửi email cảnh báo SOS đến người giám hộ</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Tôi sống một mình — SOS có thực sự cứu được tôi không?</p>
+<p class="fd-a">✅ Đây chính là trường hợp SOS được thiết kế để giải quyết. Khi AFib cấp tính + Shock Index nguy hiểm: hệ thống tự động gửi cảnh báo đến 3 người giám hộ kèm vị trí GPS chính xác — họ có thể điều người đến hoặc gọi 115 hộ bạn. Yếu tố quan trọng nhất: thiết lập đúng người giám hộ (người có thể phản ứng nhanh) và kiểm tra liên lạc định kỳ.</p>
+<p class="fd-q">❓ Nếu tôi hủy SOS nhầm, có gửi lại được không?</p>
+<p class="fd-a">✅ Có — sau khi hủy, màn hình hiển thị nút "Gửi SOS ngay" để bạn kích hoạt thủ công nếu thực sự cần. Hệ thống cũng giữ lại cảnh báo trong nhật ký để bạn xem lại. Nếu bạn thường xuyên hủy nhầm do false positive (đo sai), hãy kiểm tra lại kỹ thuật đo — tay lạnh và rung tay là nguyên nhân phổ biến nhất gây kích hoạt nhầm.</p>
+<p class="fd-q">❓ Người giám hộ của tôi ở nước ngoài. Họ có nhận được cảnh báo không?</p>
+<p class="fd-a">✅ Có — cảnh báo qua email và push notification hoạt động toàn cầu, miễn là có internet. Email đến ngay lập tức dù người giám hộ đang ở múi giờ nào. Link Google Maps trong email mở ra vị trí của bạn — họ có thể gọi hàng xóm hoặc liên hệ 115 Việt Nam hộ bạn từ bất kỳ đâu.</p>
+<p class="fd-q">❓ 15 giây có đủ để tôi phản ứng nếu tim đập loạn và choáng không?</p>
+<p class="fd-a">✅ 15 giây đủ cho người còn tỉnh táo nhấn Hủy (nút lớn, dễ nhấn, không cần mở khóa điện thoại). Nếu bạn đang choáng thật sự → không cần làm gì — SOS tự gửi là điều bạn muốn xảy ra. Thiết kế 15 giây đã cân nhắc kỹ: ngắn hơn = nhiều false alarm, dài hơn = mất cơ hội cứu người thực sự bất tỉnh.</p>
+<p class="fd-q">❓ Tôi có thể thử SOS để xem nó hoạt động không?</p>
+<p class="fd-a">✅ Có — vào mục Cài đặt → SOS → "Gửi thử nghiệm". Hệ thống gửi email thử với ghi chú rõ ràng "ĐÂY LÀ THỬ NGHIỆM" đến tất cả người giám hộ. Khuyến nghị thử ít nhất 1 lần khi thiết lập lần đầu để xác nhận email người giám hộ đúng và họ biết cách phản ứng khi nhận cảnh báo thật.</p>
+<p class="fd-q">❓ SOS có hoạt động khi điện thoại hết pin hoặc tắt nguồn không?</p>
+<p class="fd-a">✅ Không — SOS cần điện thoại bật và có mạng để gửi. Khuyến nghị sạc điện thoại &gt;20% trước khi đo, đặc biệt với người cao tuổi sống một mình. Tính năng cảnh báo pin thấp trong HeartSense sẽ nhắc bạn sạc khi pin xuống dưới 20% trong giờ đo theo lịch Holter.</p>
+<p class="fd-q">❓ Người giám hộ của tôi có cần cài app HeartSense không?</p>
+<p class="fd-a">✅ Không cần cài app. Người giám hộ chỉ cần có email để nhận cảnh báo và điện thoại có internet để xem link bản đồ. Push notification sẽ hoạt động nếu họ mở HeartSense ít nhất một lần trên trình duyệt của họ — nhưng email là kênh chính, đủ để đảm bảo họ nhận được cảnh báo.</p>
+</div>`,
 
 /* ⑥ HOLTER 7 NGÀY ★ PRIORITY */
 'fd-holter': `
@@ -1775,12 +1844,6 @@
   <tr><td>Theo dõi sau điều trị</td><td>Lặp lại mỗi lần = tốn thêm tiền</td><td>✅ <strong>Miễn phí theo dõi không giới hạn</strong></td></tr>
 </table>
 <div class="fd-hl">📌 HeartSense không thay thế Holter ECG bệnh viện — mà bổ sung: theo dõi dài hạn không tốn kém, phù hợp tầm soát cộng đồng và theo dõi sau điều trị.</div>
-
-<p>Holter ECG bệnh viện tiêu chuẩn thường 24–48 giờ — đủ cho AFib liên tục nhưng bỏ sót AFib từng cơn xuất hiện 1–2 lần/tuần. 7 ngày bắt được phần lớn các trường hợp AFib paroxysmal (từng cơn) theo nghiên cứu Ziegler et al. 2015. Hơn 7 ngày: người dùng mệt mỏi, compliance giảm, dữ liệu thưa hơn. 7 ngày là điểm tối ưu giữa độ bao phủ và khả năng tuân thủ.</p>
-<p>6 lần/ngày (8h, 11h, 14h, 17h, 20h, 23h) là thiết kế có chủ ý: phủ đủ các thời điểm khác nhau trong ngày vì AFib có thể xuất hiện chủ yếu vào buổi sáng hoặc tối tùy người. Nếu chỉ đo 1–2 lần/ngày: xác suất bỏ sót cơn AFib ngắn rất cao. Mỗi lần đo chỉ tốn 60–90 giây — tương đương 9 phút/ngày, ít hơn thời gian xem 1 video ngắn.</p>
-<p>Không thay thế — mà bổ sung. Holter ECG bệnh viện đo điện sinh học tim trực tiếp qua điện cực dán da, chính xác hơn về cấu trúc sóng điện. HeartSense đo huyết động học (dòng chảy máu) qua PPG. Ưu điểm của HeartSense: miễn phí, tại nhà, không cần điện cực, 7 ngày thay vì 24h, phù hợp sàng lọc cộng đồng và theo dõi sau điều trị.</p>
-<p>Bỏ sót &lt;20% lần đo (tức là &lt;8/42 lần) vẫn cho biểu đồ đủ tin cậy. Hệ thống tính AFib Burden dựa trên số lần đo thực tế, không chia cho tổng số lần đo lý thuyết. Tuy nhiên, cố gắng đo đủ đặc biệt vào buổi sáng sớm (8h) và buổi tối (20h–23h) — đây là hai khung giờ AFib paroxysmal thường xuất hiện nhất theo nghiên cứu sinh nhịp học tim.</p>
-<p>ECG tại phòng khám chỉ chụp 10–30 giây "ảnh chụp nhanh" của tim. Biểu đồ 7 ngày HeartSense cho thấy: xu hướng AFib Index theo ngày, AFib Burden (% thời gian có dấu hiệu AFib), pattern theo giờ (AFib nhiều vào buổi nào), tương quan với nhật ký triệu chứng. Đây là thông tin bác sĩ cần để phân biệt AFib paroxysmal vs persistent và quyết định phác đồ điều trị.</p>
 
 
 <h4>📅 Lịch đo 7 ngày — 42 khung giờ tự động</h4>
@@ -1816,7 +1879,22 @@
 </table>
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • DECAAF II Study — <i>Delayed-Enhancement MRI Determinants of Successful Catheter Ablation of Atrial Fibrillation II — nghiên cứu đa trung tâm quốc tế 1.501 bệnh nhân, công bố trên JAMA 2014. Chứng minh AFib Burden (% thời gian có AFib) là chỉ số theo dõi sau điều trị tốt nhất</i><br>
-• Hindricks ESC AFib Guidelines 2020 — <i>Giáo sư Gerhard Hindricks, Đức — tác giả chính hướng dẫn AFib ESC 2020. Hướng dẫn quy định theo dõi Holter ít nhất 24h để đánh giá hiệu quả điều trị</i></div>`,
+• Hindricks ESC AFib Guidelines 2020 — <i>Giáo sư Gerhard Hindricks, Đức — tác giả chính hướng dẫn AFib ESC 2020. Hướng dẫn quy định theo dõi Holter ít nhất 24h để đánh giá hiệu quả điều trị</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Tôi bỏ sót 2 ngày trong tuần Holter — báo cáo có còn ý nghĩa không?</p>
+<p class="fd-a">✅ Vẫn có ý nghĩa. 5 ngày đo (≥30 lần đo) đủ để tính AFib Burden, xu hướng HRV và phát hiện phần lớn cơn AFib paroxysmal. Hệ thống tự động tính dựa trên số lần đo thực tế, không phạt vì bỏ sót. Tuy nhiên nếu bỏ sót đúng những ngày bạn có triệu chứng, có thể bỏ sót cơn AFib quan trọng — cố gắng đo đủ đặc biệt khi có triệu chứng bất thường.</p>
+<p class="fd-q">❓ Bác sĩ của tôi không biết HeartSense. Tôi giải thích báo cáo thế nào?</p>
+<p class="fd-a">✅ Báo cáo được thiết kế để tự giải thích — mỗi chỉ số có ngưỡng chuẩn kèm theo. Bạn có thể nói với bác sĩ: "Đây là dữ liệu theo dõi nhịp tim 7 ngày tương tự Holter — gồm AFib Index, HRV và sóng PPG". Hầu hết bác sĩ tim mạch quen với dữ liệu từ Apple Watch và KardiaMobile — báo cáo HeartSense theo format tương tự. Nếu cần, xuất PDF và đưa cho bác sĩ đọc trước buổi khám.</p>
+<p class="fd-q">❓ HeartSense Holter có thể thay thế hoàn toàn Holter ECG bệnh viện không?</p>
+<p class="fd-a">✅ Không thay thế mà bổ sung. Holter ECG bệnh viện đo điện sinh học tim trực tiếp, cho thấy hình dạng sóng P-QRS-T — thông tin HeartSense không có. Holter ECG cần thiết để: xác nhận chẩn đoán AFib lần đầu, phân biệt block nhĩ thất, phát hiện QT kéo dài. HeartSense tốt hơn Holter bệnh viện ở: chi phí (miễn phí vs 500k–2tr), thời gian (7 ngày vs 24h), và theo dõi sau điều trị dài hạn.</p>
+<p class="fd-q">❓ Tôi có thể bắt đầu Holter mới ngay sau khi vừa kết thúc một tuần không?</p>
+<p class="fd-a">✅ Có — nhấn "Bắt đầu tuần mới" ngay sau khi hoàn thành. Dữ liệu tuần cũ được lưu riêng. Điều này đặc biệt hữu ích khi bạn muốn so sánh trước và sau khi thay đổi thuốc, hoặc theo dõi liên tục sau ablation. Báo cáo cho phép so sánh hai tuần để bác sĩ thấy xu hướng cải thiện.</p>
+<p class="fd-q">❓ Đo 6 lần/ngày có thực sự cần thiết không? 2–3 lần có đủ không?</p>
+<p class="fd-a">✅ 2–3 lần đủ để phát hiện AFib liên tục — nhưng bỏ sót AFib từng cơn chỉ xuất hiện 1–2 giờ/ngày. 6 lần phủ đều các thời điểm khác nhau trong ngày (sáng/trưa/chiều/tối) vì AFib từng cơn có thể chỉ xuất hiện vào buổi sáng (vagally-mediated) hoặc buổi tối (adrenergic). Nếu thực sự khó đo đủ 6 lần, ưu tiên giữ 8h sáng và 23h tối — hai khung giờ quan trọng nhất lâm sàng.</p>
+<p class="fd-q">❓ Điện thoại của tôi thay đổi (mua máy mới). Dữ liệu Holter cũ có mất không?</p>
+<p class="fd-a">✅ Dữ liệu được lưu theo tài khoản người dùng trên server, không phải trên bộ nhớ điện thoại cụ thể. Đăng nhập tài khoản HeartSense trên điện thoại mới là toàn bộ lịch sử đo, báo cáo Holter và dữ liệu thuốc đều có đầy đủ. Khuyến nghị: tạo tài khoản HeartSense (không chỉ dùng local) để bảo vệ dữ liệu dài hạn.</p>
+</div>`,
 
 /* ⑦ XUẤT BÁO CÁO BÁC SĨ ★ PRIORITY */
 'fd-export': `
@@ -1836,12 +1914,6 @@
   <tr><td><strong>Thuốc + Triệu chứng</strong></td><td>Danh sách thuốc đang dùng + log triệu chứng theo ngày</td><td>Tương tác thuốc, đánh giá hiệu quả điều trị</td></tr>
   <tr><td><strong>Baseline cá nhân</strong></td><td>Nhịp tim nghỉ ngơi thực của người dùng (không phải ngưỡng chung)</td><td>So sánh với chuẩn cá nhân thay vì ngưỡng dân số</td></tr>
 </table>
-
-<p>Báo cáo HeartSense là tài liệu tham khảo bổ sung — không phải hồ sơ bệnh án chính thức. Bác sĩ có thể xem dữ liệu 42 lần đo, HRV trend, AFib pattern để ra quyết định nhanh hơn thay vì chỉ nghe mô tả bằng lời. Nhiều bác sĩ tim mạch đã quen với dữ liệu từ Apple Watch và KardiaMobile — báo cáo HeartSense theo định dạng tương tự, dễ đọc và có giải thích kèm theo.</p>
-<p>Link web có ưu điểm: hiển thị tốt trên mọi thiết bị (điện thoại, máy tính bảng, laptop của bác sĩ), tự động cập nhật nếu có thêm dữ liệu, bác sĩ có thể bookmark và xem lại lần sau. Nếu cần PDF: bác sĩ mở link, bấm Ctrl+P → Save as PDF — ra ngay báo cáo 10 trang chuẩn in ấn mà không cần phần mềm đặc biệt.</p>
-<p>Link báo cáo chứa token xác thực — chỉ người có link mới xem được, không xuất hiện trên Google hoặc bất kỳ công cụ tìm kiếm nào. Bạn kiểm soát hoàn toàn: không chia sẻ link = không ai xem được. Khi không cần nữa, bạn có thể tạo link mới với token khác và link cũ sẽ hết hiệu lực.</p>
-<p>10 trang bao gồm: (1) Thống kê tổng quan 7 ngày, (2) Biểu đồ AFib Index theo ngày và giờ, (3) HRV trend (SDNN, RMSSD), (4) Sóng PPG đại diện từng ngày, (5) Nhật ký triệu chứng người dùng tự ghi, (6) Danh sách thuốc đang dùng, (7) CHA₂DS₂-VASc score, (8) Các cơn AFib nghi ngờ với timestamp chính xác. Bác sĩ có đủ để ra quyết định có cần Holter ECG thật sự hay không.</p>
-<p>Báo cáo là trang web HTML thuần — mở được trên bất kỳ trình duyệt nào (Chrome, Safari, Firefox) trên bất kỳ thiết bị nào. Bác sĩ không cần tài khoản HeartSense, không cần cài app, không cần đăng nhập. Chỉ cần click link là xem ngay — thiết kế ưu tiên trải nghiệm của bác sĩ đang bận rộn.</p>
 
 
 <h4>📱 Cách chia sẻ — Từ app đến bác sĩ trong 10 giây</h4>
@@ -1873,7 +1945,24 @@
 <div class="fd-hl">🏥 Tính năng này thu hẹp khoảng cách giữa theo dõi sức khỏe tại nhà và chẩn đoán tại phòng khám — bệnh nhân mang dữ liệu thực đến bác sĩ thay vì mô tả triệu chứng mơ hồ bằng lời.</div>
 <div class="fd-src">📚 <b>Nền tảng công nghệ:</b><br>
 • Web Share API (W3C Living Standard) — <i>W3C (World Wide Web Consortium): tổ chức đặt ra các tiêu chuẩn web quốc tế. Web Share API cho phép chia sẻ nội dung từ trình duyệt sang bất kỳ app nào trên điện thoại (Zalo, Gmail, v.v.) chỉ bằng 1 nút</i><br>
-• AES-256-GCM encryption — <i>Tiêu chuẩn mã hóa quân sự 256-bit của NIST Mỹ. Báo cáo được mã hóa trước khi chia sẻ — chỉ người nhận có link mới đọc được</i></div>`,
+• AES-256-GCM encryption — <i>Tiêu chuẩn mã hóa quân sự 256-bit của NIST Mỹ. Báo cáo được mã hóa trước khi chia sẻ — chỉ người nhận có link mới đọc được</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Bác sĩ có thể đọc báo cáo HeartSense qua điện thoại Samsung/iPhone của họ không?</p>
+<p class="fd-a">✅ Có — báo cáo là trang web HTML thuần, mở được trên mọi trình duyệt (Chrome, Safari, Firefox) trên mọi thiết bị. Bác sĩ không cần cài app, không cần tài khoản, chỉ cần nhấn link. Nếu họ muốn PDF để lưu vào hồ sơ bệnh án: mở link, bấm Ctrl+P (hoặc Share → Print trên điện thoại), chọn "Save as PDF".</p>
+<p class="fd-q">❓ Báo cáo có tuân thủ quy định bảo mật thông tin y tế không?</p>
+<p class="fd-a">✅ Dữ liệu mã hóa AES-256-GCM (tiêu chuẩn quân sự). Link báo cáo chứa token ngẫu nhiên 256-bit — không thể đoán được, không lập chỉ mục bởi Google. Bạn kiểm soát hoàn toàn: xóa token = link cũ vô hiệu lực ngay lập tức. HeartSense không chia sẻ dữ liệu với bên thứ ba mà không có sự đồng ý rõ ràng của người dùng.</p>
+<p class="fd-q">❓ Tôi có thể gửi báo cáo cho nhiều bác sĩ cùng lúc không?</p>
+<p class="fd-a">✅ Có — một link có thể mở trên nhiều thiết bị. Hoặc tạo nhiều link riêng với thời hạn khác nhau cho từng bác sĩ. Ví dụ: link cho bác sĩ tim mạch (hiệu lực 30 ngày), link cho bác sĩ gia đình (hiệu lực 7 ngày). Mỗi link có thể được vô hiệu hóa độc lập khi không cần nữa.</p>
+<p class="fd-q">❓ Link báo cáo có thời hạn không? Sau bao lâu sẽ hết hạn?</p>
+<p class="fd-a">✅ Mặc định link hiệu lực 30 ngày. Bạn có thể cấu hình: 7 ngày (cho buổi khám sắp tới), 90 ngày (cho theo dõi dài hạn), hoặc vĩnh viễn (cho hồ sơ bệnh nhân lâu dài). Khuyến nghị: đặt thời hạn vừa đủ — không nên giữ link mở mãi vì thông tin sức khỏe cần được bảo vệ.</p>
+<p class="fd-q">❓ Tôi muốn chỉ chia sẻ 3 ngày nhất định, không phải toàn bộ 7 ngày — có được không?</p>
+<p class="fd-a">✅ Có — khi xuất báo cáo, bạn chọn khoảng thời gian: 3 ngày / 7 ngày / tùy chọn ngày bắt đầu–kết thúc. Điều này hữu ích khi bạn muốn chia sẻ đúng khoảng thời gian có triệu chứng bất thường thay vì toàn bộ 7 ngày bao gồm cả những ngày bình thường.</p>
+<p class="fd-q">❓ Bác sĩ có thể ghi chú nhận xét vào báo cáo không?</p>
+<p class="fd-a">✅ Tính năng này đang phát triển trong phiên bản tiếp theo. Hiện tại, bác sĩ có thể in báo cáo và ghi chú trên bản in, hoặc sao chép link báo cáo vào phần mềm quản lý bệnh nhân của phòng khám. Trong tương lai, Doctor Mode cho phép bác sĩ gắn nhận xét trực tiếp vào báo cáo digital.</p>
+<p class="fd-q">❓ Tôi có thể chia sẻ báo cáo qua Messenger, Viber hay chỉ Zalo/Gmail?</p>
+<p class="fd-a">✅ Web Share API cho phép chia sẻ qua bất kỳ app nào trên điện thoại — Messenger, Viber, Telegram, WhatsApp, thậm chí SMS. Trên máy tính, copy link và paste vào bất kỳ kênh nào. Link hoạt động trên mọi trình duyệt — người nhận không cần cài thêm bất kỳ app nào.</p>
+</div>`,
 
 /* ─── CÁC TÍNH NĂNG KHÁC ─── */
 
@@ -1890,10 +1979,6 @@
 </table>
 <h4>⚙️ Cách Baseline hoạt động</h4>
 <p>Hệ thống yêu cầu ≥3 lần đo vào buổi sáng sớm sau ngủ dậy (5–7h), trước cà phê và vận động — đây là thời điểm nhịp tim ở trạng thái nghỉ ngơi thực sự nhất. Lấy <strong>trung vị của 3 lần</strong> (không phải trung bình để tránh ảnh hưởng của ngày bất thường) → lưu làm Baseline.</p>
-<p>Nhịp tim biến động ngay cả khi nghỉ ngơi. 3 lần đo trong 3 buổi sáng khác nhau cho trung bình đủ ổn định để làm "nhịp nền cá nhân". Chỉ 1 lần: có thể trùng vào hôm bạn vừa ngủ kém, uống cà phê, hoặc stress — cho baseline thiên lệch. 3 lần lấy trung vị (median) loại bỏ ngày bất thường.</p>
-<p>60–100 BPM là ngưỡng của <em>dân số chung</em>. Vận động viên marathon có thể có 42 BPM khi nghỉ — bình thường với họ nhưng cảnh báo "bradycardia" theo ngưỡng chung. Ngược lại, người 70 tuổi bệnh nền có 85 BPM là bình thường với họ. Baseline cá nhân giúp HeartSense phát hiện "tăng bất thường so với chính bạn" thay vì so với dân số chung.</p>
-<p>Có. Nhịp tim nền thay đổi theo mùa, theo mức độ luyện tập, và theo tuổi. Nên cập nhật baseline mỗi 3 tháng hoặc sau sự kiện lớn (phẫu thuật, bắt đầu tập gym, thay đổi thuốc tim mạch). Hệ thống sẽ nhắc bạn khi baseline cũ hơn 90 ngày.</p>
-
 
 <h4>📋 Hướng dẫn thiết lập Baseline</h4>
 <table>
@@ -1903,7 +1988,16 @@
   <tr><td>3</td><td>Nhấn "Lưu làm Baseline" sau khi đo</td><td>Chỉ lưu khi tín hiệu tốt (confidence ≥70%)</td></tr>
   <tr><td>4</td><td>Lặp lại 3 buổi sáng liên tiếp</td><td>Tránh đo sau ngày căng thẳng hoặc bệnh</td></tr>
   <tr><td>5</td><td>✅ Baseline được lưu — kết quả tương lai sẽ so sánh với baseline này</td><td>Cập nhật lại Baseline sau 3 tháng hoặc thay đổi lớn về sức khỏe</td></tr>
-</table>`,
+</table>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Tôi bị bệnh trong 3 ngày đo baseline — baseline đó có đáng tin không?</p>
+<p class="fd-a">✅ Không đáng tin — khi bệnh, nhịp tim tăng cao hơn bình thường (sốt mỗi 1°C tăng khoảng 10 BPM). Baseline đo lúc bệnh sẽ bị lệch cao. Hệ thống sử dụng trung vị (median) của 3 lần để giảm ảnh hưởng của 1 ngày bất thường, nhưng nếu cả 3 ngày đều bệnh thì baseline vẫn không chính xác. Đợi khỏi bệnh hoàn toàn 3 ngày rồi đo lại baseline.</p>
+<p class="fd-q">❓ Baseline của tôi là 58 BPM nhưng ứng dụng vẫn cảnh báo "thấp"?</p>
+<p class="fd-a">✅ HeartSense so sánh kết quả đo hiện tại với baseline cá nhân của bạn, không chỉ với ngưỡng dân số. Nếu baseline của bạn là 58 và hôm nay đo được 52 — giảm hơn 10% so với chính bạn — đó là dấu hiệu cần chú ý dù 52 vẫn nằm trong ngưỡng "bình thường" theo tiêu chuẩn chung. Hệ thống được thiết kế để phát hiện bất thường so với "bạn bình thường", không phải "dân số bình thường".</p>
+<p class="fd-q">❓ Tôi vừa bắt đầu tập thể dục đều đặn. Có cần cập nhật baseline không?</p>
+<p class="fd-a">✅ Có — sau 4–6 tuần tập cardio đều đặn, nhịp tim nghỉ ngơi thường giảm 5–10 BPM. Baseline cũ sẽ không còn phản ánh "bình thường của bạn hiện tại". Cập nhật baseline mỗi 3 tháng, hoặc bất cứ khi nào lối sống thay đổi đáng kể: bắt đầu/ngừng thuốc tim mạch, thay đổi lớn về cân nặng, hoặc sau chương trình tập luyện mới.</p>
+</div>`,
 
 'fd-bioshield': `
 <h4>🧭 Bioshield giải quyết vấn đề gì?</h4>
@@ -1916,10 +2010,6 @@
   <tr><td><strong>Tầng 3: Xu hướng 7 ngày</strong></td><td>Chuỗi HRV, BPM, AFib Burden tuần trước</td><td>Xu hướng sức khỏe đang cải thiện hay xấu đi</td></tr>
   <tr><td><strong>Yếu tố môi trường</strong></td><td>Giờ trong ngày + nhiệt độ thời tiết thực tế (GPS)</td><td>4–6h sáng và nhiệt độ &lt;10°C là cửa sổ nguy hiểm cao nhất</td></tr>
 </table>
-<p>Bioshield phân tích 3 tầng dữ liệu: (1) Kết quả đo gần nhất (trạng thái hiện tại), (2) Xu hướng 7 ngày (pattern lịch sử), (3) Yếu tố môi trường như nhiệt độ và độ ẩm từ dữ liệu thời tiết. Kết hợp 3 tầng này cho phép dự báo "cửa sổ nguy cơ" trong 24h tiếp theo mà không cần đeo thiết bị liên tục.</p>
-<p>Không. "Nguy hiểm" nghĩa là trong 24h tới, các yếu tố kết hợp (HRV thấp + nhiệt độ cao + pattern lịch sử) làm tăng xác suất xuất hiện bất thường. Đây là cảnh báo phòng ngừa: hạn chế vận động mạnh, uống đủ nước, nghỉ ngơi thêm, và đo tim thường xuyên hơn hôm nay. Không phải chắc chắn xảy ra biến cố.</p>
-<p>Khi nóng: tim phải đập nhanh hơn để tản nhiệt, gây tăng nhịp tim và giảm HRV. Khi lạnh đột ngột: mạch máu co lại, huyết áp tăng, tim phải bơm mạnh hơn. Nghiên cứu Mostofsky et al. (JACC 2012) cho thấy ngày nóng &gt;32°C tăng nguy cơ cơn AFib 9%. HeartSense tích hợp dữ liệu thời tiết từ OpenWeatherMap để cá nhân hóa cảnh báo.</p>
-
 
 <h4>📊 Đọc kết quả Bioshield</h4>
 <table>
@@ -1928,7 +2018,16 @@
   <tr><td>🟡 Cần chú ý</td><td>1–2 tầng có dấu hiệu bất thường nhỏ</td><td>Hạn chế vận động mạnh, đo tim thêm 1–2 lần trong ngày</td></tr>
   <tr><td>🔴 Cảnh báo</td><td>Nhiều tầng bất thường + yếu tố nguy hiểm môi trường</td><td>Nghỉ ngơi hoàn toàn, có người ở cùng, chuẩn bị SOS</td></tr>
 </table>
-<div class="fd-hl">⚠️ Bioshield là công cụ dự báo sàng lọc — không phải chẩn đoán y tế. Kết quả "Cảnh báo" không có nghĩa chắc chắn sẽ xảy ra biến cố — mà là thời điểm cần thêm cẩn thận.</div>`,
+<div class="fd-hl">⚠️ Bioshield là công cụ dự báo sàng lọc — không phải chẩn đoán y tế. Kết quả "Cảnh báo" không có nghĩa chắc chắn sẽ xảy ra biến cố — mà là thời điểm cần thêm cẩn thận.</div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Bioshield cảnh báo đỏ nhưng tôi cảm thấy bình thường — tôi có nên lo không?</p>
+<p class="fd-a">✅ Đây là câu hỏi quan trọng nhất về Bioshield. Cảnh báo đỏ = "các chỉ số đang ở ngưỡng đặc biệt cần chú ý" — không phải "biến cố chắc chắn xảy ra". Nhiều cơn AFib cấp tính xảy ra không có triệu chứng (silent AFib). Cảm giác "bình thường" không loại trừ nguy cơ. Hành động được khuyến nghị: nghỉ ngơi, tránh vận động mạnh, đo lại sau 30 phút. Nếu vẫn đỏ → gọi người thân ở cùng và cân nhắc liên hệ bác sĩ.</p>
+<p class="fd-q">❓ Tại sao Bioshield tính cả nhiệt độ thời tiết? Tim tôi có liên quan đến thời tiết không?</p>
+<p class="fd-a">✅ Có — ảnh hưởng rõ rệt. Nhiệt độ lạnh &lt;10°C kích thích hệ thần kinh giao cảm, làm co mạch máu và tăng huyết áp đột ngột — đây là cơ chế chính giải thích tỷ lệ đột quỵ và nhồi máu cơ tim cao nhất vào 4–6h sáng mùa đông. Buổi sáng sớm + trời lạnh + HRV thấp + AFib Index cao = cửa sổ nguy hiểm đa tầng mà Bioshield theo dõi đồng thời.</p>
+<p class="fd-q">❓ Bioshield có nhớ lịch sử cảnh báo trước đây không?</p>
+<p class="fd-a">✅ Có — tất cả cảnh báo Bioshield được ghi vào nhật ký có dấu thời gian. Bạn có thể xuất nhật ký này vào báo cáo bác sĩ. Điều này đặc biệt hữu ích để bác sĩ thấy "pattern" — ví dụ: bệnh nhân luôn có cảnh báo đỏ vào thứ Hai sáng (căng thẳng đầu tuần?) hoặc luôn cảnh báo khi trời dưới 15°C (nhạy cảm với lạnh).</p>
+</div>`,
 
 'fd-cci': `
 <h4>🫀 Chỉ số Dẫn truyền Tim (CCI) — Đo sức khỏe mạch máu</h4>
@@ -1941,9 +2040,6 @@
 </table>
 <h4>📊 Đo 2 tay — Phát hiện hẹp mạch bất đối xứng</h4>
 <p>Tính năng đặc biệt: đo cả ngón trỏ tay trái và tay phải, so sánh. Chênh lệch ASI &gt;15% giữa 2 tay có thể là dấu hiệu <strong>hẹp mạch máu một bên</strong> (vd. hẹp động mạch dưới đòn) — một dấu hiệu nguy cơ đột quỵ độc lập quan trọng.</p>
-<p>BPM đo tần số tim. HRV đo tính đều đặn. CCI đo <strong>chất lượng sóng mạch</strong> — hình dạng và biên độ của mỗi nhịp đập. ASI (Arterial Stiffness Index) đo độ cứng mạch máu — tăng theo tuổi và là dấu hiệu sớm của xơ vữa động mạch. PAV đo biến động biên độ sóng. Ba chỉ số CCI bổ sung chiều thứ 3 vào bức tranh sức khỏe tim mạch.</p>
-<p>Bất đối xứng ASI giữa 2 tay (&gt;15%) có thể gợi ý tắc nghẽn động mạch dưới đòn một bên — dấu hiệu của xơ vữa động mạch cục bộ. Bác sĩ thường đo huyết áp cả 2 tay chính xác vì lý do này. HeartSense làm điều tương tự bằng PPG — miễn phí và tại nhà.</p>
-<p>Có. Tập thể dục aerobic đều đặn, giảm muối, kiểm soát huyết áp, và bỏ thuốc lá đều cải thiện ASI theo thời gian. HeartSense theo dõi ASI qua các lần đo giúp bạn thấy được tiến bộ sau mỗi tháng tập luyện hoặc thay đổi lối sống.</p>
 
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • Vlachopoulos, Aznaouridis &amp; Stefanadis JACC 2010 — <i>JACC (Journal of the American College of Cardiology): tạp chí Tim mạch hàng đầu Mỹ. Nghiên cứu 11.193 người xác nhận ASI (Arterial Stiffness Index — Chỉ số Độ cứng Động mạch) dự báo nguy cơ tim mạch độc lập với huyết áp thông thường</i><br>
@@ -2062,7 +2158,16 @@
 <div class="fd-hl">📌 SDNN &lt;50ms trong nhiều ngày liên tiếp = dấu hiệu nguy cơ tim mạch cao độc lập theo Task Force ESC/NASPE 1996.</div>
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • Task Force ESC/NASPE 1996 — <i>ESC (Hội Tim mạch Châu Âu) &amp; NASPE (Hội Tạo nhịp &amp; Điện sinh lý Bắc Mỹ). Tài liệu "HRV: Standards of Measurement, Physiological Interpretation, and Clinical Use" — được trích dẫn hơn 15.000 lần, là tiêu chuẩn quốc tế bất biến cho mọi nghiên cứu HRV</i><br>
-• Kleiger et al. Am J Cardiol 1987 — <i>American Journal of Cardiology: tạp chí Tim mạch Mỹ. Nghiên cứu tiên phong (808 bệnh nhân sau nhồi máu cơ tim) chứng minh SDNN &lt;50ms dự báo tử vong tim mạch trong 31 tháng — lần đầu tiên HRV được công nhận là chỉ số tiên lượng lâm sàng</i></div>`,
+• Kleiger et al. Am J Cardiol 1987 — <i>American Journal of Cardiology: tạp chí Tim mạch Mỹ. Nghiên cứu tiên phong (808 bệnh nhân sau nhồi máu cơ tim) chứng minh SDNN &lt;50ms dự báo tử vong tim mạch trong 31 tháng — lần đầu tiên HRV được công nhận là chỉ số tiên lượng lâm sàng</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Chỉ số CCI rất cao/thấp so với mức bình thường — tôi có nên hoảng sợ không?</p>
+<p class="fd-a">✅ Đừng hoảng sợ từ một lần đo. CCI phản ánh trạng thái dẫn truyền mạch máu tại thời điểm đo — bị ảnh hưởng bởi nhiệt độ tay, mức độ hydrat hóa, và tư thế. Đo 3 lần vào 3 thời điểm khác nhau trong ngày. Nếu cả 3 lần đều bất thường theo cùng chiều hướng (đều rất cao hoặc đều rất thấp) → đó mới là tín hiệu đáng để trao đổi với bác sĩ.</p>
+<p class="fd-q">❓ CCI và huyết áp có liên quan không? Tôi đang theo dõi huyết áp.</p>
+<p class="fd-a">✅ Có mối tương quan gián tiếp. CCI đo độ cứng và dẫn truyền mạch máu — khi CCI thấp (mạch cứng), huyết áp tâm thu thường cao hơn vì tim phải bơm mạnh hơn để thắng sức cản. Tuy nhiên CCI và huyết áp đo hai thứ khác nhau và không thay thế nhau. Dùng CCI như "chỉ số sức khỏe mạch máu" song song với huyết áp để có bức tranh toàn diện hơn.</p>
+<p class="fd-q">❓ Tại sao kết quả CCI của tôi thay đổi nhiều giữa các lần đo trong ngày?</p>
+<p class="fd-a">✅ Mạch máu biến động theo nhiều yếu tố: nhiệt độ cơ thể tăng sau bữa ăn làm giãn mạch (CCI tăng), stress làm co mạch (CCI giảm), caffeine làm co mạch tạm thời, hydrat hóa ảnh hưởng đến độ nhớt máu. Để có số CCI đáng tin nhất: đo buổi sáng sớm, nhịn ăn 2h, ngồi yên 5 phút trước khi đo, nhiệt độ phòng bình thường. So sánh CCI cùng điều kiện mới có ý nghĩa.</p>
+</div>`,
 
 'fd-recommendation': `
 <h4>💡 Khuyến nghị Cá nhân hóa — Không phải lời khuyên chung chung</h4>
@@ -2085,13 +2190,20 @@
   <tr><td>Chú ý</td><td>🟡</td><td>Điều chỉnh lối sống</td><td>"Ngủ thêm, giảm cà phê, theo dõi thêm"</td></tr>
   <tr><td>Tích cực</td><td>🟢</td><td>Củng cố hành vi tốt</td><td>"Tim ổn định — lối sống hiện tại đang hiệu quả"</td></tr>
 </table>
-<p>Khuyến nghị là kết hợp của rule-based logic (nếu AFib Index &gt;55 → khuyến nghị gặp bác sĩ) và AI context (Pocket Cardiologist giải thích tại sao). Rule-based đảm bảo nhất quán và an toàn. AI thêm sắc thái cá nhân hóa. Không khuyến nghị nào được AI tự ý đề xuất thuốc cụ thể — đó là giới hạn y đức được thiết kế có chủ ý.</p>
-<p>HeartSense không biết toàn bộ bệnh sử của bạn. Với kết quả đo đơn lẻ không rõ nguyên nhân, khuyến nghị an toàn nhất là "đo lại" hoặc "hỏi bác sĩ". Khi bạn có đủ lịch sử 7 ngày và đã điền đầy đủ hồ sơ (tuổi, bệnh nền, thuốc), khuyến nghị sẽ cụ thể và cá nhân hóa hơn nhiều.</p>
 
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • ESC AFib Guidelines 2020 — <i>ESC (European Society of Cardiology — Hội Tim mạch Châu Âu). Hướng dẫn điều trị AFib toàn diện nhất thế giới, cập nhật 2020</i><br>
 • AHA/ACC Heart Rate Guidelines 2019 — <i>AHA (American Heart Association — Hiệp hội Tim mạch Mỹ) &amp; ACC (American College of Cardiology — Trường Môn Tim mạch Mỹ). Hướng dẫn về ngưỡng nhịp tim an toàn trong vận động và nghỉ ngơi</i><br>
-• WHO Physical Activity Recommendations — <i>WHO (World Health Organization — Tổ chức Y tế Thế giới). Khuyến nghị vận động thể chất toàn cầu — 150 phút cardio vừa/tuần cho người &gt;18 tuổi</i></div>`,
+• WHO Physical Activity Recommendations — <i>WHO (World Health Organization — Tổ chức Y tế Thế giới). Khuyến nghị vận động thể chất toàn cầu — 150 phút cardio vừa/tuần cho người &gt;18 tuổi</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Khuyến nghị màu đỏ xuất hiện liên tục mấy ngày — tôi có cần đi cấp cứu ngay không?</p>
+<p class="fd-a">✅ Màu đỏ trong HeartSense nghĩa là "cần hành động ngay trong vài giờ" — không nhất thiết là cấp cứu ngay lúc này. Đánh giá dựa trên triệu chứng thực tế: nếu có đau ngực, khó thở, tê liệt tay/mặt, nói ngọng → gọi 115 ngay. Nếu không có triệu chứng cấp → gọi cho bác sĩ hoặc đến phòng khám trong ngày hôm đó. Màu đỏ liên tiếp nhiều ngày mà không có triệu chứng = cần khám sớm trong 24–48h.</p>
+<p class="fd-q">❓ Khuyến nghị có tính đến thuốc tôi đang uống không?</p>
+<p class="fd-a">✅ Có — nếu bạn đã nhập danh sách thuốc vào mục Hồ sơ. Ví dụ: nếu bạn đang dùng beta-blocker, hệ thống biết nhịp tim thấp hơn bình thường là do thuốc (không phải bất thường), và điều chỉnh ngưỡng khuyến nghị tương ứng. Khuyến nghị chính xác nhất khi hồ sơ cá nhân đầy đủ: tuổi, bệnh nền, thuốc đang dùng, lịch sử phẫu thuật tim.</p>
+<p class="fd-q">❓ Tôi đã ngủ đủ giấc và không căng thẳng — tại sao vẫn bị cảnh báo?</p>
+<p class="fd-a">✅ Lối sống chỉ là một trong nhiều yếu tố. Khuyến nghị dựa trên tổ hợp: kết quả đo tim vừa xong + lịch sử 7 ngày + baseline cá nhân + yếu tố nguy cơ nền (tuổi, bệnh nền). Đôi khi AFib Index cao không liên quan đến giấc ngủ hay stress — mà do cà phê uống sáng, mất nước nhẹ, thay đổi thuốc, hoặc đơn giản là biến thiên sinh học tự nhiên. Xem lại kết quả đo cụ thể để biết yếu tố nào đang kéo điểm xuống.</p>
+</div>`,
 
 'fd-stroke-predictor': `
 <h4>🧠 Dự báo Đột quỵ 72h — Tại sao có thể dự báo trước?</h4>
@@ -2227,13 +2339,18 @@
   <tr><td><strong>SD1/SD2 ratio</strong></td><td>Tỷ lệ biến thiên ngắn/dài hạn</td><td>&gt;1.0 = ngắn hạn lấn át dài hạn = loạn nhịp không có chu kỳ</td><td>Chỉ số AFib đặc trưng nhất</td></tr>
 </table>
 <div class="fd-hl">💡 Poincaré Plot được bác sĩ điện sinh lý học dùng hàng ngày. Trong HeartSense, đây là công cụ trực quan nhất để giải thích cho người không chuyên tại sao tim đang loạn nhịp.</div>
-<p>Poincaré Plot vẽ mỗi cặp nhịp tim liên tiếp thành 1 điểm trên đồ thị. Tim đều đặn → các điểm tụ thành hình elip gọn. Tim AFib → các điểm phân tán ngẫu nhiên như "đám mây". Hình dạng đồ thị cho bác sĩ và người dùng thấy ngay nhịp tim đang như thế nào — không cần đọc số, nhìn shape là hiểu.</p>
-<p>SD1 đo biến thiên ngắn hạn (nhịp-thở, HRV tức thì). SD2 đo biến thiên dài hạn (điều hòa tự chủ thần kinh). Tỷ lệ SD1/SD2 bình thường khoảng 0.7–1.2. AFib thường làm SD1 tăng vọt và SD1/SD2 &gt;1.5 — elip dẹp theo chiều ngắn và kéo dài theo chiều dài.</p>
 
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • Brennan et al. Auton Neurosci 2002 — <i>Autonomic Neuroscience: tạp chí Thần kinh Tự chủ học. Nghiên cứu mô tả nền tảng toán học của biểu đồ Poincaré, chứng minh SD1/SD2 phản ánh hoạt động giao cảm vs. phó giao cảm</i><br>
 • Karmakar et al. PLOS ONE 2009 — <i>PLOS ONE: tạp chí khoa học mở (open-access) đa ngành. Nghiên cứu xác nhận Poincaré Plot phân biệt được AFib với nhịp bình thường qua hình dạng đám điểm</i><br>
-• Niskanen et al. 2004 HRV Poincaré — <i>Nghiên cứu chuẩn hóa phương pháp đo SD1/SD2 từ biểu đồ Poincaré trong phân tích HRV lâm sàng</i></div>`,
+• Niskanen et al. 2004 HRV Poincaré — <i>Nghiên cứu chuẩn hóa phương pháp đo SD1/SD2 từ biểu đồ Poincaré trong phân tích HRV lâm sàng</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Biểu đồ Poincaré của tôi trông như đám mây lớn, không tập trung — điều đó có nghĩa gì?</p>
+<p class="fd-a">✅ Đám điểm trải rộng = biến thiên nhịp tim lớn. Ở người trẻ khỏe mạnh khi nghỉ ngơi đây là tốt — tim thích nghi linh hoạt. Nhưng nếu đám điểm cực kỳ rộng và phân tán không theo hình elipse bình thường → dấu hiệu của loạn nhịp hoặc AFib. Hình elipse nghiêng 45° đều là dấu hiệu tim khỏe. Đám điểm tròn hoặc vuông (không có hướng ưu tiên) → cần kiểm tra thêm.</p>
+<p class="fd-q">❓ Tỷ lệ SD1/SD2 cao hay thấp thì tốt hơn?</p>
+<p class="fd-a">✅ Tỷ lệ SD1/SD2 khoảng 0.7–0.9 là lý tưởng cho người nghỉ ngơi — biến thiên ngắn hạn và dài hạn cân bằng. SD1/SD2 &gt;1.0 trong nhiều phép đo là dấu hiệu đặc trưng AFib — nhịp tim ngắn hạn lấn át hoàn toàn. SD1/SD2 rất thấp (&lt;0.3) cho thấy tim cứng nhắc, không thích nghi tốt — thường ở người lớn tuổi hoặc bệnh tim mạch tiến triển. Không có con số "tốt hơn" tuyệt đối — cần đọc trong ngữ cảnh toàn bộ kết quả.</p>
+</div>`,
 
 'fd-sampen': `
 <h4>🔢 Sample Entropy & LF/HF Ratio — Đo độ "hỗn loạn" và cân bằng thần kinh tim</h4>
@@ -2257,13 +2374,18 @@
   <tr><td>LF + HF đều thấp</td><td>Tự chủ tim giảm</td><td>Dấu hiệu bệnh tim mạch tiến triển hoặc đái tháo đường thần kinh</td></tr>
 </table>
 <div class="fd-hl">💡 LF/HF Ratio &gt;5 liên tục nhiều ngày = trạng thái stress mãn tính → tăng nguy cơ AFib và biến cố tim mạch. Đây là chỉ số "thấy" stress trước khi triệu chứng xuất hiện.</div>
-<p>Trong toán học, entropy đo mức độ "ngẫu nhiên" hay "không thể đoán trước". Tim khỏe mạnh có entropy vừa phải — không quá đều (như robot) cũng không quá hỗn loạn. Tim AFib có entropy rất cao vì nhịp đập hoàn toàn ngẫu nhiên. Tim suy tim nặng có entropy rất thấp vì nhịp đập cứng nhắc, mất khả năng thích ứng.</p>
-<p>Approximate Entropy (ApEn) tính bằng cách so sánh chuỗi con có tự lặp lại không — nhưng có bias khi chuỗi ngắn. Sample Entropy (SampEn) sửa bias này bằng cách loại trừ tự so sánh. HeartSense dùng SampEn vì chính xác hơn với chuỗi 30–90 nhịp (60–90 giây đo).</p>
 
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • Richman &amp; Moorman Am J Physiol 2000 — <i>American Journal of Physiology: tạp chí Sinh lý học Mỹ. Công bố phương pháp Sample Entropy (SampEn) — đo độ hỗn loạn nhịp tim, càng cao = AFib càng nghiêm trọng. Phương pháp cải tiến từ Approximate Entropy của Pincus 1991</i><br>
 • Task Force ESC/NASPE 1996 (LF/HF) — <i>ESC &amp; NASPE. Định nghĩa chuẩn quốc tế cho LF (Low Frequency 0.04–0.15Hz — giao cảm) và HF (High Frequency 0.15–0.4Hz — phó giao cảm) trong phân tích phổ HRV</i><br>
-• Shaffer &amp; Ginsberg Frontiers 2017 — <i>Frontiers in Public Health: tạp chí mở quốc tế. Tổng quan toàn diện về ứng dụng lâm sàng của HRV — hướng dẫn đọc các thông số HRV cho người thực hành</i></div>`,
+• Shaffer &amp; Ginsberg Frontiers 2017 — <i>Frontiers in Public Health: tạp chí mở quốc tế. Tổng quan toàn diện về ứng dụng lâm sàng của HRV — hướng dẫn đọc các thông số HRV cho người thực hành</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Sample Entropy của tôi rất cao — điều đó tốt hay xấu?</p>
+<p class="fd-a">✅ Phụ thuộc vào giá trị cụ thể. SampEn ở mức trung bình (0.5–1.5) = tim khỏe mạnh, phức tạp có cấu trúc. SampEn rất cao (&gt;2.0) thường gặp trong AFib — nhịp tim hỗn loạn không dự đoán được. SampEn rất thấp (&lt;0.3) = tim đập đều đặn quá mức, không thích nghi — gặp trong suy tim nặng. "Phức tạp vừa phải có cấu trúc" = tim khỏe nhất.</p>
+<p class="fd-q">❓ LF/HF ratio của tôi cao sau buổi họp căng thẳng — có bình thường lại không?</p>
+<p class="fd-a">✅ Hoàn toàn bình thường và thường bình thường lại trong 1–4 giờ sau khi stress qua đi. Thực hành: đo LF/HF ngay sau họp, rồi đo lại sau 30 phút thở sâu — thấy LF/HF giảm là bằng chứng kỹ thuật thở hoạt động. Nếu LF/HF cao liên tục nhiều ngày ngay cả buổi sáng khi nghỉ ngơi → đó là stress mãn tính cần giải quyết sâu hơn (ngủ, vận động, tham vấn tâm lý).</p>
+</div>`,
 
 'fd-population': `
 <h4>🌍 So sánh với dân số — Biết mình đang ở đâu so với người cùng tuổi</h4>
@@ -2281,13 +2403,18 @@
   <tr><td>10th–25th percentile</td><td>🟡 Dưới trung bình — có thể cải thiện</td></tr>
   <tr><td>Dưới 10th percentile</td><td>🔴 Cần chú ý — có thể có vấn đề y tế cần kiểm tra</td></tr>
 </table>
-<p>HeartSense kết hợp 2 nguồn: (1) Dữ liệu chuẩn từ Task Force HRV 1996 và các nghiên cứu dân số lớn (Framingham, NHANES), phân tầng theo tuổi và giới. (2) Dữ liệu ẩn danh từ người dùng HeartSense tự nguyện đóng góp cho nghiên cứu AFib Việt Nam. Cả hai nguồn kết hợp cho so sánh phù hợp với người Việt hơn dữ liệu phương Tây thuần túy.</p>
-<p>So sánh với dân số cho bạn biết mức độ ưu tiên. HRV 45ms ở người 60 tuổi: so với ngưỡng chung trông bình thường, nhưng nếu 80% người cùng tuổi có HRV &gt;55ms → bạn đang ở nhóm rủi ro cao hơn trung bình. Thông tin này giúp bạn và bác sĩ quyết định cần theo dõi tích cực hơn hay không.</p>
 
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • Sammito &amp; Böckelmann Int Arch Occup Environ Health 2016 — <i>International Archives of Occupational and Environmental Health: tạp chí Y học Lao động &amp; Môi trường. Nghiên cứu giá trị HRV chuẩn theo độ tuổi (20–79 tuổi) — HeartSense dùng để so sánh kết quả của bạn với người cùng tuổi</i><br>
 • Chugh et al. Circulation 2014 — <i>Circulation (AHA): tạp chí Tim mạch Mỹ. Nghiên cứu toàn cầu (80 quốc gia) về gánh nặng AFib — cung cấp dữ liệu cơ sở dân số để HeartSense chuẩn hóa benchmark theo tuổi và giới</i><br>
-• AHA Heart Rate Guidelines — <i>AHA (Hiệp hội Tim mạch Mỹ). Hướng dẫn ngưỡng nhịp tim an toàn (40–100 BPM nghỉ ngơi) và theo dõi tần số tim trong lâm sàng</i></div>`,
+• AHA Heart Rate Guidelines — <i>AHA (Hiệp hội Tim mạch Mỹ). Hướng dẫn ngưỡng nhịp tim an toàn (40–100 BPM nghỉ ngơi) và theo dõi tần số tim trong lâm sàng</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Chỉ số của tôi ở percentile thứ 10 — điều đó có nghĩa tôi bệnh nặng không?</p>
+<p class="fd-a">✅ Không nhất thiết. Percentile thứ 10 nghĩa là 90% người cùng tuổi có chỉ số tốt hơn — đó là tín hiệu cần chú ý, không phải chẩn đoán bệnh. Có thể do: đo trong điều kiện không lý tưởng (sau cà phê, sau vận động, tay lạnh), bệnh nền đang ảnh hưởng, hoặc lối sống cần cải thiện. Đo lại vào buổi sáng sớm, nghỉ ngơi hoàn toàn 3 lần trong 3 ngày khác nhau. Nếu vẫn ở percentile thấp → trao đổi với bác sĩ.</p>
+<p class="fd-q">❓ So sánh với dân số Việt Nam hay dân số thế giới?</p>
+<p class="fd-a">✅ Dữ liệu benchmark hiện tại từ nghiên cứu quốc tế (chủ yếu Châu Âu và Mỹ). Dân số Á Đông có một số khác biệt nhỏ về chỉ số HRV do tầm vóc và di truyền — nhưng sự khác biệt không đủ lớn để làm benchmark vô nghĩa. HeartSense đang thu thập dữ liệu từ người dùng Việt Nam để xây dựng benchmark cụ thể hơn trong các phiên bản tương lai. Hiện tại, benchmark quốc tế vẫn là tham chiếu đáng tin cậy.</p>
+</div>`,
 
 'fd-heart-bio-age': `
 <h4>🫀 Tuổi Tim Sinh học — Tim bạn thật ra bao nhiêu tuổi?</h4>
@@ -2360,10 +2487,15 @@
   <tr><td>71–85</td><td>🟠 Cam</td><td>Rủi ro cao — cần hành động</td><td>Gặp bác sĩ sớm, không chờ lịch hẹn</td></tr>
   <tr><td>86–100</td><td>🔴 Đỏ</td><td>Rủi ro rất cao — nhiều yếu tố nguy hiểm cùng lúc</td><td>Gặp bác sĩ ngay, SOS sẵn sàng</td></tr>
 </table>
-<p>Stroke Risk tập trung vào nguy cơ đột quỵ cụ thể (dựa trên CHA₂DS₂-VASc). IRS (Individual Risk Score) là điểm rủi ro tổng hợp rộng hơn: kết hợp AFib, HRV, ASI, lối sống, bệnh nền — đánh giá "sức khỏe tim mạch tổng thể" chứ không chỉ đột quỵ. IRS cao có thể do nhiều nguyên nhân: stress mãn tính, thiếu ngủ, mất cân bằng điện giải, không chỉ AFib.</p>
-<p>IRS phản ánh nhiều yếu tố, nên cải thiện nhiều chiều cùng lúc: đo tim đều đặn (Holter 7 ngày nâng cao baseline data), tập thở resonance 5 phút/ngày (tăng HRV), ngủ đủ 7–8 giờ (HRV phục hồi ban đêm), giảm caffeine (giảm AFib trigger), và kiểm soát bệnh nền đang có. Hầu hết người dùng thấy IRS cải thiện sau 4–6 tuần thay đổi lối sống nhất quán.</p>
 
-<div class="fd-hl">📈 IRS quan trọng nhất là xu hướng, không phải con số tuyệt đối. IRS 60 đang giảm dần = tốt. IRS 40 đang tăng dần mỗi ngày = cần chú ý. Theo dõi IRS 7 ngày là chỉ số tiên lượng quan trọng nhất.</div>`,
+<div class="fd-hl">📈 IRS quan trọng nhất là xu hướng, không phải con số tuyệt đối. IRS 60 đang giảm dần = tốt. IRS 40 đang tăng dần mỗi ngày = cần chú ý. Theo dõi IRS 7 ngày là chỉ số tiên lượng quan trọng nhất.</div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ IRS của tôi là 72 — điều này có nghĩa tôi sắp bị đau tim không?</p>
+<p class="fd-a">✅ Không. IRS 72 (ngưỡng cam — rủi ro cao) nghĩa là nhiều chỉ số tim mạch đang ở mức đáng lo ngại đồng thời — không phải dự báo biến cố cụ thể. IRS là "điểm cảnh báo tổng hợp", không phải "xác suất đau tim". Hành động đúng: gặp bác sĩ sớm (trong vài ngày), không phải cấp cứu ngay. Mang theo báo cáo HeartSense để bác sĩ có đầy đủ dữ liệu 7 ngày.</p>
+<p class="fd-q">❓ IRS của tôi tốt suốt 6 ngày rồi đột ngột đỏ hôm nay — có nên lo không?</p>
+<p class="fd-a">✅ IRS thay đổi đột ngột 1 ngày thường do: đo trong điều kiện không chuẩn (sau cà phê, sau vận động, tay lạnh, căng thẳng), bệnh cấp tính nhẹ (cảm cúm), hoặc thiếu ngủ một đêm. Một ngày đỏ sau 6 ngày tốt → đo lại sau 2 giờ trong điều kiện nghỉ ngơi hoàn toàn. Nếu vẫn đỏ → chú ý thêm. IRS đỏ liên tục 3 ngày trở lên mới là tín hiệu đáng lo.</p>
+</div>`,
 
 'fd-med-effectiveness': `
 <h4>💊 Đánh giá Hiệu quả Thuốc — Thuốc có thực sự đang hoạt động không?</h4>
@@ -2416,9 +2548,6 @@
   <tr><td>Giảm đột ngột dù không thay đổi thói quen</td><td>Dấu hiệu overtrain, bệnh tiềm ẩn, hoặc tác dụng phụ thuốc mới</td></tr>
   <tr><td>Dao động lớn giữa các ngày</td><td>Căng thẳng hoặc thiếu ngủ ảnh hưởng hệ thần kinh tự chủ</td></tr>
 </table>
-<p>Heart Rate Recovery (HRR) — tốc độ nhịp tim giảm sau vận động — phản ánh trực tiếp sức mạnh hệ thần kinh phó giao cảm. HRR thấp (&lt;12 BPM sau 1 phút) là yếu tố tiên lượng tử vong tim mạch độc lập — mạnh hơn cả nhiều yếu tố nguy cơ khác (Cole et al., NEJM 1999). Nhịp lúc nghỉ chỉ cho thấy tim đang làm gì, HRR cho thấy tim có thể phục hồi tốt không.</p>
-<p>Đo nhịp tim ngay sau vận động (tầm 1 phút sau khi dừng), sau đó đo lại sau 1 phút và 2 phút nghỉ. HRR1 = nhịp ngay sau - nhịp sau 1 phút; HRR2 = nhịp ngay sau - nhịp sau 2 phút. HRR1 &gt;20 BPM và HRR2 &gt;40 BPM là chỉ số sức khỏe tim mạch tốt.</p>
-
 
 <h4>✅ Cách thực hiện Test HRR trong HeartSense</h4>
 <ol>
@@ -2431,7 +2560,16 @@
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • Cole et al. NEJM 1999 — <i>NEJM (New England Journal of Medicine): tạp chí y khoa uy tín nhất thế giới, IF ~180. Nghiên cứu 5.234 bệnh nhân chứng minh HRR &lt;12 BPM/phút dự báo tử vong tim mạch mạnh hơn hầu hết xét nghiệm cận lâm sàng</i><br>
 • Jouven et al. NEJM 2005 — <i>NEJM. Nghiên cứu 5.713 người (theo dõi 23 năm) xác nhận HRR là yếu tố dự báo đột tử tim mạch độc lập — người HRR &lt;12 có nguy cơ đột tử cao gấp 2.2×</i><br>
-• AHA Scientific Statement 2015 — <i>AHA (Hiệp hội Tim mạch Mỹ). Tuyên bố khoa học chính thức công nhận HRR là chỉ số nguy cơ tim mạch lâm sàng, khuyến nghị đưa vào thực hành thường quy</i></div>`,
+• AHA Scientific Statement 2015 — <i>AHA (Hiệp hội Tim mạch Mỹ). Tuyên bố khoa học chính thức công nhận HRR là chỉ số nguy cơ tim mạch lâm sàng, khuyến nghị đưa vào thực hành thường quy</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Tôi không thể tập thể dục vì đau khớp — có thể đo HRR mà không vận động không?</p>
+<p class="fd-a">✅ Có thể đo HRR với vận động nhẹ thay thế: giơ cánh tay trên đầu 30 lần liên tục, ngồi đứng 10 lần nhẹ nhàng, hoặc cơ đùi co bóp ngồi tại chỗ. Không cần tim đập đến mức tối đa — chỉ cần tăng nhịp tim 20–30 BPM so với nền. HRR vẫn có giá trị dự báo dù cường độ vận động thấp, vì phản ánh tốc độ hệ phó giao cảm kích hoạt lại — không phụ thuộc cường độ vận động cụ thể.</p>
+<p class="fd-q">❓ HRR của tôi là 8 BPM — điều đó nguy hiểm ở mức nào?</p>
+<p class="fd-a">✅ HRR &lt;12 BPM/phút là ngưỡng đáng lo theo nghiên cứu Cole NEJM 1999 (5.234 người). HRR = 8 nghĩa là hệ thần kinh phó giao cảm phục hồi chậm — tim bạn "bám" trạng thái căng thẳng lâu hơn bình thường sau vận động. Không nguy hiểm tức thì, nhưng là tín hiệu cần chú ý. Trước tiên: đảm bảo đo đúng kỹ thuật (ngừng vận động NGAY khi bắt đầu đo, không nghỉ trước). Nếu vẫn &lt;12 sau 3 lần thử → trao đổi với bác sĩ.</p>
+<p class="fd-q">❓ Tôi đang dùng thuốc beta-blocker — HRR của tôi có bị ảnh hưởng không?</p>
+<p class="fd-a">✅ Có, đáng kể. Beta-blocker làm giảm nhịp tim tối đa và làm chậm phục hồi nhịp tim sau vận động — nên HRR của bạn sẽ thấp hơn người không dùng thuốc. Đây không phải vấn đề — đó là tác dụng mong muốn của thuốc. HeartSense điều chỉnh ngưỡng khi bạn nhập beta-blocker vào danh sách thuốc. Nếu chưa nhập: vào Hồ sơ → Thuốc → thêm tên thuốc để hệ thống chuẩn hóa ngưỡng cho bạn.</p>
+</div>`,
 
 'fd-coherence': `
 <h4>🧬 Cộng hưởng Tim-Não (Cardiac Coherence) — Tim và Não đang đồng bộ không?</h4>
@@ -2452,8 +2590,6 @@
   <tr><td>0.2–0.49</td><td>🟡 Coherence thấp</td><td>Hay lo lắng, khó tập trung, dễ cáu</td><td>Thiền, giảm caffeine, ngủ đủ 7–8h</td></tr>
   <tr><td>&lt;0.2</td><td>🔴 Loạn nhịp thần kinh</td><td>Stress nặng, mất ngủ, nguy cơ AFib tăng</td><td>Báo bác sĩ nếu kéo dài &gt;2 tuần</td></tr>
 </table>
-<p>Đây là tên thông dụng của chỉ số <strong>HRV Coherence</strong> — đo mức độ đồng bộ giữa nhịp tim và nhịp thở. Khi coherence cao: hệ thần kinh giao cảm và phó giao cảm cân bằng tốt, tim và phổi "hô hấp cùng nhịp". Nghiên cứu từ HeartMath Institute và nhiều tạp chí y khoa peer-reviewed xác nhận coherence cao liên quan đến giảm stress và cải thiện HRV.</p>
-<p>Có. Thở chậm 5–6 nhịp/phút (Resonance Frequency Breathing) là kỹ thuật được chứng minh lâm sàng để tăng HRV, giảm huyết áp và cải thiện coherence. Nhiều bệnh viện tim mạch châu Âu dùng biofeedback thở trong phục hồi chức năng sau nhồi máu cơ tim.</p>
 
 
 <h4>🌬️ Kỹ thuật Coherence Breathing (Thở Cộng hưởng)</h4>
@@ -2468,7 +2604,14 @@
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • McCraty et al. HeartMath Institute 2015 — <i>HeartMath Institute (California, Mỹ): viện nghiên cứu chuyên về kết nối tim-não. Nghiên cứu "Heart-brain neurodynamics" chứng minh tim gửi nhiều tín hiệu thần kinh lên não hơn chiều ngược lại — cơ sở khoa học của Cardiac Coherence</i><br>
 • Task Force HRV ESC 1996 (LF/HF standard) — <i>ESC (Hội Tim mạch Châu Âu). Định nghĩa chuẩn quốc tế cho tỷ lệ LF/HF — thước đo cân bằng giao cảm/phó giao cảm mà mọi thiết bị HRV trên thế giới đang dùng</i><br>
-• Lehrer &amp; Gevirtz 2014 Frontiers in Psychology — <i>Frontiers in Psychology: tạp chí Tâm lý học mở quốc tế. Tổng quan toàn diện về HRV Biofeedback — kỹ thuật thở cộng hưởng 6 nhịp/phút làm tăng Coherence Score, được áp dụng trong HeartSense Breathing Coach</i></div>`,
+• Lehrer &amp; Gevirtz 2014 Frontiers in Psychology — <i>Frontiers in Psychology: tạp chí Tâm lý học mở quốc tế. Tổng quan toàn diện về HRV Biofeedback — kỹ thuật thở cộng hưởng 6 nhịp/phút làm tăng Coherence Score, được áp dụng trong HeartSense Breathing Coach</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ Tôi không biết thiền — tính năng Coherence có dùng được không?</p>
+<p class="fd-a">✅ Không cần biết thiền. Kỹ thuật Coherence Breathing chỉ cần hít vào đếm 5 giây, thở ra đếm 5 giây — lặp lại trong 10 phút. App có hướng dẫn hình ảnh chuyển động để bạn theo dõi nhịp thở. Đây là kỹ thuật sinh học (biofeedback) — bạn thở đúng nhịp, tim tự điều chỉnh. Không cần tâm linh, không cần kinh nghiệm, không cần im lặng hoàn toàn.</p>
+<p class="fd-q">❓ Coherence Score của tôi luôn thấp dù tôi không stress — có vấn đề gì không?</p>
+<p class="fd-a">✅ Coherence Score thấp khi nghỉ ngơi không nhất thiết là vấn đề sức khỏe. Một số người tự nhiên có pattern HRV ít "coherent" do di truyền hoặc độ tuổi. Yếu tố quan trọng hơn: xu hướng theo thời gian. Nếu Coherence Score luôn thấp và không cải thiện sau 2 tuần thực hành thở → có thể phản ánh tình trạng stress mãn tính, thiếu ngủ tích lũy, hoặc AFib ngầm ảnh hưởng đến pattern HRV.</p>
+</div>`,
 
 'fd-electrolyte': `
 <h4>⚖️ Nguy cơ Mất cân bằng Điện giải — Khi khoáng chất quyết định nhịp tim</h4>
@@ -2488,9 +2631,6 @@
   <tr><td>Giảm biên độ sóng + nhịp không đều nhẹ</td><td>Mg²⁺ thấp</td><td>Trung bình</td></tr>
   <tr><td>AFib tái phát ngay sau khi đã ổn định ≥2 tuần</td><td>Cả K⁺ và Mg²⁺</td><td>Nghi vấn cao</td></tr>
 </table>
-<p>PPG không đo điện giải trực tiếp (cần xét nghiệm máu). HeartSense suy luận <strong>gián tiếp</strong>: mất cân bằng kali, magie, canxi làm thay đổi đặc trưng của sóng PPG và RR intervals theo cách đặc trưng. Đây là chỉ số gợi ý (flag), không phải đo trực tiếp — luôn xác nhận bằng xét nghiệm máu khi có cảnh báo.</p>
-<p>Kali, Natri, Canxi và Magie là các ion kiểm soát điện thế màng tế bào cơ tim. Mất cân bằng — đặc biệt giảm kali (hạ kali máu) — là nguyên nhân phổ biến gây loạn nhịp, kể cả AFib. Người dùng lợi tiểu (furosemide) hoặc nôn nhiều có nguy cơ cao. Phát hiện sớm giúp bổ sung điện giải trước khi tim bị ảnh hưởng.</p>
-
 
 <h4>🥗 Nguồn thực phẩm bổ sung điện giải</h4>
 <table>
@@ -2516,7 +2656,16 @@
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • Gettes &amp; Reuter 1974 J Physiology — <i>Journal of Physiology (Physiological Society, Anh): tạp chí Sinh lý học lâu đời nhất thế giới (1878). Nghiên cứu cơ chế: K⁺ thấp kéo dài thời gian tái phân cực → kéo dài khoảng QT → tăng nguy cơ loạn nhịp</i><br>
 • Ceremuzynski et al. JACC 1997 — <i>JACC (Journal of the American College of Cardiology). Nghiên cứu lâm sàng 150 bệnh nhân AFib sau nhồi máu: bổ sung Mg²⁺ giảm tái phát AFib 46% so với nhóm chứng</i><br>
-• ESC AFib Guidelines 2020 — electrolyte management — <i>Hội Tim mạch Châu Âu 2020. Hướng dẫn: duy trì K⁺ &gt;4.0 mmol/L và Mg²⁺ &gt;1.0 mg/dL là bắt buộc để kiểm soát AFib hiệu quả</i></div>`,
+• ESC AFib Guidelines 2020 — electrolyte management — <i>Hội Tim mạch Châu Âu 2020. Hướng dẫn: duy trì K⁺ &gt;4.0 mmol/L và Mg²⁺ &gt;1.0 mg/dL là bắt buộc để kiểm soát AFib hiệu quả</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ HeartSense cảnh báo thiếu điện giải — tôi có cần uống thuốc bổ sung ngay không?</p>
+<p class="fd-a">✅ Không tự ý uống thuốc bổ sung điện giải mà không có chỉ định bác sĩ. Kali và Magie dư thừa cũng nguy hiểm như thiếu hụt — thận yếu không thải được K⁺ dư → loạn nhịp ngược chiều. HeartSense cảnh báo nguy cơ, không kê đơn. Hành động đúng: đi xét nghiệm máu điện giải (chi phí ~100k tại phòng khám) rồi nhờ bác sĩ quyết định có cần bổ sung không và liều lượng bao nhiêu.</p>
+<p class="fd-q">❓ Tôi ăn nhiều chuối và rau xanh — cần lo về thiếu điện giải không?</p>
+<p class="fd-a">✅ Chế độ ăn tốt là bước đúng hướng. Thiếu điện giải thường không phải do ăn ít — mà do mất quá nhiều qua thuốc lợi tiểu, đổ mồ hôi nhiều (mùa hè, tập thể dục), tiêu chảy kéo dài, hoặc thận không tái hấp thu đủ. Nếu bạn không dùng thuốc lợi tiểu, không đổ mồ hôi nhiều, không có bệnh thận — chế độ ăn tốt thường đủ để duy trì điện giải bình thường.</p>
+<p class="fd-q">❓ Cảnh báo điện giải xuất hiện bao nhiêu lần thì đáng lo?</p>
+<p class="fd-a">✅ Một lần cảnh báo đơn lẻ: có thể do đo sau vận động nhiều, mất nước nhẹ, hoặc ngón tay lạnh ảnh hưởng tín hiệu. Không cần lo quá. Ba lần trở lên trong một tuần, đặc biệt vào buổi sáng lúc nghỉ ngơi hoàn toàn: đáng để làm xét nghiệm điện giải. Xu hướng liên tục nhiều ngày đáng tin hơn nhiều so với một lần cảnh báo đơn lẻ.</p>
+</div>`,
 
 'fd-drug-interaction': `
 <h4>⚠️ Kiểm tra Tương tác Thuốc — Khi hai loại thuốc tốt lại gây nguy hiểm khi dùng chung</h4>
@@ -2698,13 +2847,20 @@
   <tr><td>Tay lạnh &lt;20°C</td><td>🟡 Giảm chính xác</td><td>Co mạch ngoại vi → vi rung yếu hơn</td></tr>
 </table>
 <div class="fd-hl">🎯 BCG là tính năng đo thụ động duy nhất — không yêu cầu người dùng làm gì thêm. Phù hợp nhất với người làm việc văn phòng đang dùng máy tính, muốn biết nhịp tim trong khi làm việc mà không cần dừng lại.</div>
-<p>PPG đo thay đổi ánh sáng do dòng chảy máu. BCG (Ballistocardiography) đo rung động cơ học do tim co bóp — lực đẩy máu tạo ra micro-rung động ở ngón tay tiếp xúc với camera. BCG và PPG bổ trợ nhau: PPG tốt cho nhịp tim và HRV, BCG thêm thông tin về lực bóp tim và tình trạng van tim.</p>
-<p>Khi ngón tay đặt trên camera với áp lực nhẹ, mỗi nhịp tim tạo ra micro-displacement (dịch chuyển) ở ngón tay vài micromet. Camera frame-by-frame capture sự dịch chuyển này qua optical flow analysis. Tín hiệu BCG được tách ra từ tín hiệu PPG bằng band-pass filter tần số khác nhau.</p>
 
 <div class="fd-src">📚 <b>Nguồn khoa học:</b><br>
 • Inan et al. IEEE TBIOM 2015 — <i>IEEE TBIOM (Transactions on Biomedical and Health Informatics): tạp chí Kỹ thuật Y sinh &amp; Tin học Sức khỏe IEEE. Bài tổng quan toàn diện về BCG (Ballistocardiography) — công nghệ đo tim từ vi rung cơ học</i><br>
 • Kim et al. EMBC 2016 — <i>IEEE EMBC (Engineering in Medicine and Biology Conference): hội nghị Kỹ thuật Y sinh lớn nhất thế giới của IEEE. Nghiên cứu BCG qua chuột máy tính — nền tảng lý thuyết cho tính năng Keyboard BCG của HeartSense</i><br>
-• Brüser et al. IEEE JBHI 2013 — <i>IEEE JBHI (Journal of Biomedical and Health Informatics). Thuật toán phân tích tín hiệu BCG để trích xuất BPM và HRV từ vi rung</i></div>`,
+• Brüser et al. IEEE JBHI 2013 — <i>IEEE JBHI (Journal of Biomedical and Health Informatics). Thuật toán phân tích tín hiệu BCG để trích xuất BPM và HRV từ vi rung</i></div>
+<h4>❓ Giải đáp thắc mắc thường gặp</h4>
+<div class="fd-qa">
+<p class="fd-q">❓ BCG qua bàn phím có thực sự đo được nhịp tim hay chỉ là ước lượng thô?</p>
+<p class="fd-a">✅ BCG qua bàn phím cho kết quả BPM với độ chính xác khoảng ±5 BPM trong điều kiện lý tưởng (ngồi yên, gõ phím nhẹ) — đủ tin cậy để phát hiện nhịp tim nhanh bất thường (&gt;100 BPM) hoặc quá chậm (&lt;50 BPM). Không đủ chính xác để thay thế đo ngón trỏ PPG. BCG là tính năng "nền" — theo dõi liên tục không chủ ý, cảnh báo khi phát hiện bất thường lớn, nhắc bạn đo chính thức bằng ngón trỏ để xác nhận.</p>
+<p class="fd-q">❓ BCG có hoạt động trên laptop không, hay chỉ desktop?</p>
+<p class="fd-a">✅ Hoạt động tốt nhất trên laptop đặt trên mặt phẳng cứng (bàn gỗ, bàn kim loại). Laptop đặt trên đùi hoặc trên gối mềm → nệm hấp thụ vi rung → BCG kém hiệu quả. Desktop với bàn phím ngoài rời: tín hiệu từ ngón tay cần truyền qua bàn phím → bàn → cảm biến — có thể mất một phần. Tốt nhất: laptop trên mặt bàn cứng, ngồi thẳng, bàn tay đặt tự nhiên trên bàn phím.</p>
+<p class="fd-q">❓ BCG có thể phát hiện AFib không, hay chỉ đo BPM?</p>
+<p class="fd-a">✅ BCG phát hiện được bất thường nhịp tim rõ ràng — đặc biệt nhịp không đều lớn đặc trưng AFib. Tuy nhiên độ chính xác thấp hơn PPG ngón trỏ đáng kể (do nhiễu chuyển động và suy giảm tín hiệu). BCG dương tính → nhắc đo ngón trỏ ngay để xác nhận. Không dùng BCG như công cụ chẩn đoán AFib chính — đó là nhiệm vụ của đo PPG ngón trỏ 60 giây.</p>
+</div>`,
 
 'fd-skin-calibration': `
 <h4>🎨 Hiệu chỉnh Da & BMI — Tại sao quan trọng và vì sao hầu hết app bỏ qua?</h4>
