@@ -1287,6 +1287,7 @@
     .hs-fd-panel h4:first-child { margin-top:0; }
     .hs-fd-panel .fd-hl { background:#fef9c3; border-left:3px solid #f59e0b; padding:8px 12px; border-radius:0 8px 8px 0; margin:8px 0; font-weight:600; }
     .hs-fd-panel .fd-src { font-size:11px; color:#64748b; margin-top:10px; padding-top:8px; border-top:1px dashed #cbd5e1; }
+    .hs-fd-panel .fd-intro { background:#eff6ff; border-left:4px solid #3b82f6; padding:10px 14px; border-radius:0 10px 10px 0; margin:0 0 14px 0; font-size:14px; line-height:1.7; color:#1e3a5f; font-weight:500; }
     .hs-fd-panel table { width:100%; border-collapse:collapse; margin:8px 0; }
     .hs-fd-panel th { background:#e0f2fe; color:#0369a1; padding:6px 10px; font-size:12px; text-align:left; }
     .hs-fd-panel td { padding:5px 10px; border-bottom:1px solid #f1f5f9; font-size:12px; vertical-align:top; }
@@ -1325,6 +1326,7 @@
 
 /* ① ĐO NGÓN TRỎ / KHUÔN MẶT ★ PRIORITY */
 'fd-measurement': `
+<p class="fd-intro">👉 Đây là tính năng cốt lõi. Người dùng đặt ngón trỏ che kín camera sau điện thoại, đèn flash bật sáng trong 60 giây. Mỗi nhịp tim đẩy máu qua ngón tay làm thay đổi độ sáng pixel mà camera ghi lại. Không cần thiết bị gì cả — chỉ cần có chiếc điện thoại smartphone trong người.</p>
 <h4>💡 PPG là gì? — Giải thích đơn giản nhất</h4>
 <p><strong>PPG (Photoplethysmography)</strong> — dịch nôm na là <em>"đo tim bằng ánh sáng"</em>. Nguyên lý chỉ có 1 câu: <strong>máu đỏ vì có hemoglobin hấp thụ ánh sáng xanh lá, nên khi tim bơm máu đến mao mạch, lượng ánh sáng phản chiếu về camera thay đổi theo từng nhịp tim</strong>. Camera ghi lại sự thay đổi đó → phần mềm đếm tần số thay đổi → ra nhịp tim.</p>
 <p>Đây <strong>không phải công nghệ mới</strong> — máy đo SpO2 (kẹp ngón tay ở bệnh viện) hoạt động bằng PPG từ năm 1972. Apple Watch, Garmin, Fitbit đều dùng PPG. HeartSense tận dụng camera sẵn có của điện thoại để thực hiện PPG mà không cần mua thiết bị thêm.</p>
@@ -1395,6 +1397,7 @@
 
 /* ② KẾT QUẢ TỨC THÌ ★ PRIORITY */
 'fd-results': `
+<p class="fd-intro">👉 HeartSense không dựa vào một chỉ số duy nhất. Phần mềm chấm điểm từ 17 dấu hiệu khác nhau như độ biến thiên nhịp tim, hệ số biến thiên CV, mức độ ngẫu nhiên của nhịp, và nhiều chỉ số khác — rồi tổng hợp lại, giống như một hội đồng bác sĩ cùng đọc kết quả. Đây là điểm khác biệt so với các ứng dụng đo nhịp tim thông thường chỉ đếm BPM.</p>
 <h4>💡 Sau khi đo xong, bạn thấy 4 con số — Mỗi số nói gì?</h4>
 <p>Đây là 4 chỉ số tim mạch quan trọng nhất mà bạn nhận được tức thì sau 60 giây đo. Mỗi số đo một khía cạnh khác nhau của sức khỏe tim: không có số nào là "đủ" để đánh giá một mình — chúng bổ trợ nhau để cho bức tranh toàn diện.</p>
 <table>
@@ -1477,6 +1480,7 @@
 
 /* ③ PHÁT HIỆN AFIB ★ PRIORITY */
 'fd-afib': `
+<p class="fd-intro">👉 Sau 60 giây đo, HeartSense cho biết nhịp tim của bạn đang ở trạng thái nào: Bình thường, Cần theo dõi, hay Nghi ngờ Rung nhĩ. Điều này quan trọng vì rung nhĩ làm cho buồng trên của tim co bóp hỗn loạn 350–600 lần/phút thay vì 60–100 lần bình thường, dẫn đến nguy cơ đột quỵ rất cao.</p>
 <h4>🫀 AFib là gì? — Giải thích bằng hình ảnh dễ hiểu nhất</h4>
 <p>Tim bình thường đập theo mô hình: <strong>nhĩ co bóp đẩy máu vào thất → thất bóp đẩy máu ra toàn thân → nghỉ → lặp lại</strong>, đều đặn 60–100 lần/phút.</p>
 <p>Tim AFib: nhĩ không bóp theo nhịp mà <strong>rung lên loạn xạ 400–600 lần/phút</strong> — như nước sôi sùng sục thay vì chảy đều. Kết quả: máu không được bơm sạch → ứ đọng trong buồng nhĩ → hình thành cục máu đông → đông máu vỡ ra và trôi lên não → <strong>đột quỵ thiếu máu não</strong>.</p>
@@ -1551,6 +1555,7 @@
 
 /* ④ POCKET CARDIOLOGIST ★ PRIORITY */
 'fd-pocket-cardio': `
+<p class="fd-intro">👉 Sau khi đo xong, người dùng có thể hỏi thẳng vào ứng dụng: "Kết quả của tôi có đáng lo không?" AI sẽ trả lời ngay lập tức bằng tiếng Việt, ở mức độ chuyên gia của một bác sĩ chuyên khoa 2 tim mạch 20 năm kinh nghiệm. Điều đặc biệt là AI biết kết quả đo cụ thể của người dùng — không giống như ChatGPT thông thường không có thông tin đó.</p>
 <h4>🩺 Bác sĩ tim mạch trong túi — Giải quyết vấn đề gì?</h4>
 <p>Sau mỗi lần đo, bạn nhận được 4 con số (BPM, HRV, Stroke Risk, AFib Index). Vấn đề là: <strong>phần lớn người dùng không biết những con số này ý nghĩa gì với sức khỏe của cụ thể họ</strong>, và không có ai để hỏi lúc 10 giờ đêm hay 3 giờ sáng khi tim đang đập bất thường.</p>
 <p>Pocket Cardiologist là AI bác sĩ tích hợp trực tiếp, hoạt động 24/7, trả lời bằng tiếng Việt thông thường, với ngữ cảnh kết quả đo thực tế của bạn — <strong>không phải câu trả lời chung chung mà là câu trả lời dành riêng cho chỉ số của bạn lúc đó</strong>.</p>
@@ -1589,6 +1594,7 @@
 
 /* ⑤ SOS + GUARDIAN ★ PRIORITY */
 'fd-sos': `
+<p class="fd-intro">👉 Khi phát hiện rung nhĩ hoặc Shock Index nguy hiểm (chỉ số sốc tim), hệ thống đếm ngược 15 giây — đủ dài để người dùng hủy nếu đo sai, đủ ngắn để không mất thời gian khi thực sự cần cấp cứu. Nếu không hủy, HeartSense tự động gửi 3 kênh cảnh báo song song: âm thanh báo động, email đến người thân, và push notification đến điện thoại người thân dù app đã đóng.</p>
 <h4>🚨 Vấn đề mà tính năng này giải quyết</h4>
 <p>Khi AFib cấp tính xảy ra — đặc biệt với người cao tuổi sống một mình — người bệnh thường bị <strong>chóng mặt, tim đập loạn, tê tay hoặc mất ý thức trong vài giây đến vài phút</strong>. Trong trạng thái đó:</p>
 <ul>
@@ -1645,6 +1651,7 @@
 
 /* ⑥ HOLTER 7 NGÀY ★ PRIORITY */
 'fd-holter': `
+<p class="fd-intro">👉 Rung nhĩ không phải lúc nào cũng xuất hiện — nhiều người chỉ bị AFib từng cơn, lúc bình thường lúc loạn nhịp. HeartSense tạo lịch đo tự động 6 lần một ngày trong 7 ngày, nhắc người dùng đo đúng giờ, và vẽ biểu đồ 7 ngày để bác sĩ thấy xu hướng. Đây là cách phát hiện AFib kể cả khi nó không xuất hiện trong mỗi lần đo đơn lẻ.</p>
 <h4>❓ Tại sao 1 lần đo không đủ để phát hiện AFib?</h4>
 <p><strong>Paroxysmal AFib (AFib từng cơn)</strong> là loại AFib phổ biến nhất — tim loạn nhịp trong vài phút đến vài giờ, rồi <em>tự trở về bình thường</em>. Khi bạn đến bệnh viện đo ECG lúc tim đang bình thường → kết quả bình thường → bác sĩ không thấy gì → AFib bị bỏ sót hoàn toàn.</p>
 <p>Giải pháp duy nhất: đo liên tục qua nhiều ngày, bắt được cơn AFib khi nó xảy ra. Đó là lý do bệnh viện có Holter ECG 24h. HeartSense thực hiện điều tương tự trong 7 ngày bằng điện thoại.</p>
@@ -1699,6 +1706,7 @@
 
 /* ⑦ XUẤT BÁO CÁO BÁC SĨ ★ PRIORITY */
 'fd-export': `
+<p class="fd-intro">👉 Toàn bộ dữ liệu 7 ngày — sóng PPG dạng ECG, chỉ số HRV, nhật ký triệu chứng, danh sách thuốc — được đóng gói thành báo cáo 10 trang chuẩn y khoa. Người dùng chỉ cần chia sẻ link qua Zalo hoặc Gmail cho bác sĩ, bác sĩ mở ra, bấm Ctrl+P và Save as PDF, không cần cài ứng dụng gì cả. Bác sĩ có đủ thông tin để chẩn đoán và ra quyết định điều trị.</p>
 <h4>❓ Vấn đề tính năng này giải quyết</h4>
 <p>Khi bệnh nhân đến gặp bác sĩ mô tả triệu chứng: "Tim đập loạn đôi khi, đặc biệt buổi tối, khoảng 3 tuần nay" — thông tin đó vừa mơ hồ, vừa không đủ để chẩn đoán. Bác sĩ phải đoán, phải cho làm thêm nhiều xét nghiệm, hoặc tệ hơn là bỏ sót AFib từng cơn.</p>
 <p>Với HeartSense, bệnh nhân mang đến buổi khám: <strong>42 lần đo qua 7 ngày với biểu đồ, số liệu HRV/AFib Index/Stroke Risk, sóng PPG, và log triệu chứng chi tiết</strong> — bác sĩ nhìn qua 2 phút là có đủ bức tranh để ra quyết định điều trị.</p>

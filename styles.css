@@ -1823,5 +1823,149 @@ input:focus, select:focus {
 .adherence-btn { cursor: pointer; }
 .adherence-btn.taken { background: #d1fae5 !important; color: #059669 !important; border-color: #6ee7b7 !important; }
 
+/* ══════════════════════════════════════════════════════════════════
+   LIST UPDATE 1 & 2 — NEW FEATURES CSS
+   ══════════════════════════════════════════════════════════════════ */
 
+/* ── Rhythm Classification Panel ────────────────────────────── */
+#rhythmClassBox {
+  border-left: 4px solid #6366f1;
+  padding-left: 12px;
+}
 
+/* ── Digital Twin Canvas ─────────────────────────────────────── */
+#digitalTwinCanvas {
+  image-rendering: pixelated;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ── Synthetic ECG SVG ───────────────────────────────────────── */
+#syntheticECGBox svg {
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ── BCG Result ──────────────────────────────────────────────── */
+#bcgResultBox {
+  border-top: 3px solid #8b5cf6;
+}
+
+/* ── Elderly Mode ────────────────────────────────────────────── */
+body.elderly-mode {
+  font-size: 18px !important;
+}
+body.elderly-mode .info-panel p,
+body.elderly-mode .list-item span,
+body.elderly-mode .list-item strong,
+body.elderly-mode .muted {
+  font-size: 16px !important;
+  line-height: 1.6 !important;
+}
+body.elderly-mode .primary-btn,
+body.elderly-mode .secondary-btn,
+body.elderly-mode .ghost-btn {
+  font-size: 18px !important;
+  padding: 16px 24px !important;
+  border-radius: 12px !important;
+  min-height: 52px !important;
+}
+body.elderly-mode h2 { font-size: 1.6rem !important; }
+body.elderly-mode h3 { font-size: 1.3rem !important; }
+body.elderly-mode .badge { font-size: 14px !important; padding: 5px 12px !important; }
+body.elderly-mode .list-item { padding: 12px 0 !important; }
+
+/* ── Quality History Bars ────────────────────────────────────── */
+#qualityHistoryBox .list-item { align-items: center; }
+
+/* ── Expert Mode panel ───────────────────────────────────────── */
+#expertModeStatus { min-height: 18px; }
+
+/* ── Ablation Risk Form ──────────────────────────────────────── */
+#ablationRiskForm input, #ablationRiskForm select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+/* ── Daily Tip Box ───────────────────────────────────────────── */
+#dailyTipBox {
+  background: linear-gradient(135deg, #eff6ff, #f0fdf4) !important;
+  border: 1px solid #bfdbfe !important;
+  animation: none !important;
+  padding: 12px 16px !important;
+}
+
+/* ── Golden Window highlight ─────────────────────────────────── */
+#goldenWindowBox {
+  border-left: 4px solid #f59e0b;
+  padding-left: 12px;
+}
+
+/* ── Weather AFib box ────────────────────────────────────────── */
+#weatherAfibBox .list-item { border-bottom: 1px solid #f1f5f9; }
+
+/* ── SpO2 estimate ───────────────────────────────────────────── */
+#spO2EstResult {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* ── Research mode status ────────────────────────────────────── */
+#researchModeStatus {
+  padding: 6px 10px;
+  background: #f0fdf4;
+  border-radius: 6px;
+  min-height: 14px;
+}
+
+/* ── AFib Forecast box ───────────────────────────────────────── */
+#afibForecastBox {
+  border-left: 4px solid #f59e0b;
+}
+
+/* ── RSA Index box ───────────────────────────────────────────── */
+#rsaIndexBox .list-item { font-size: 13px; }
+
+/* ── BCG start button hover ──────────────────────────────────── */
+#startBCGBtn:hover { background: #7c3aed !important; color: #fff !important; }
+
+/* ── Zalo Clinic box ─────────────────────────────────────────── */
+#zaloClinicBox { border-top: 3px solid #06b6d4; margin-top: 8px; padding-top: 8px; }
+
+/* ── Ambient rPPG ────────────────────────────────────────────── */
+#ambientRPPGResult { border-top: 3px solid #7c3aed; }
+#ambientRPPGResult .list-item { padding: 4px 0; font-size: 12px; }
+
+/* ── SCG Chest Sensor ────────────────────────────────────────── */
+#scgStatus { min-height: 16px; }
+#startSCGBtn:hover { opacity: 0.85; }
+
+/* ── Voice-rPPG ──────────────────────────────────────────────── */
+#voiceRPPGStatus { min-height: 16px; }
+#voiceRPPGResultBox { border-top: 3px solid #6366f1; }
+
+/* ── Keyboard BCG ────────────────────────────────────────────── */
+#kbcgResultBox { border-top: 3px solid #f59e0b; }
+#kbcgStatus { min-height: 16px; }
+
+/* ── Thermal Proxy ───────────────────────────────────────────── */
+#thermalProxyBox { border-top: 3px solid #ef4444; }
+
+/* ── Emotional Artifact Note ─────────────────────────────────── */
+#emotionalArtifactNote {
+  animation: fade-in 0.3s ease;
+}
+
+/* ── Encryption Status ───────────────────────────────────────── */
+#encryptionStatusBox { border-left: 4px solid #22c55e; padding-left: 12px; }
+
+/* ── Battery warning ─────────────────────────────────────────── */
+#batteryWarningBox:not([hidden]) {
+  animation: pulse-warn 2s ease-in-out infinite;
+}
+@keyframes pulse-warn {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
