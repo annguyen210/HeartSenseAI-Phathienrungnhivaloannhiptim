@@ -2158,8 +2158,8 @@ function buildDoctorExportHtml(dashboard, exportToken) {
     : null;
 
   // Khoảng thời gian theo dõi
-  const firstDate = allMeasurements.length ? new Date(allMeasurements[0].createdAt).toLocaleDateString("vi-VN") : "--";
-  const lastDate  = allMeasurements.length ? new Date(allMeasurements[allMeasurements.length - 1].createdAt).toLocaleDateString("vi-VN") : "--";
+  const firstDate = allMeasurements.length ? new Date(allMeasurements[0].createdAt).toLocaleDateString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' }) : "--";
+  const lastDate  = allMeasurements.length ? new Date(allMeasurements[allMeasurements.length - 1].createdAt).toLocaleDateString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' }) : "--";
   const periodStr = totalMeasurements ? `${firstDate} – ${lastDate}` : "Chưa có dữ liệu";
 
   // Phiên có biến động mạnh nhất (irregularityIndex cao nhất) → dùng cho biểu đồ
@@ -2170,7 +2170,7 @@ function buildDoctorExportHtml(dashboard, exportToken) {
   const chartWaveform = mostVolatile?.result?.waveform || latestMeasurement?.result?.waveform || [];
   const chartSqi      = mostVolatile?.result?.signalQuality || latestMeasurement?.result?.signalQuality || "--";
   const chartBpm      = mostVolatile?.result?.bpm || "--";
-  const chartDate     = mostVolatile ? new Date(mostVolatile.createdAt).toLocaleDateString("vi-VN") : "--";
+  const chartDate     = mostVolatile ? new Date(mostVolatile.createdAt).toLocaleDateString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' }) : "--";
   const ecgSvg = buildEcgSvg(chartWaveform);
 
   // Trạng thái tổng quan
@@ -2192,14 +2192,14 @@ function buildDoctorExportHtml(dashboard, exportToken) {
     const hBurden = Math.round(hAfib / hDone * 100);
     const hBpms = hlog.filter(l => l.bpm).map(l => l.bpm);
     const hMeanBpm = hBpms.length ? Math.round(hBpms.reduce((a, b) => a + b, 0) / hBpms.length) : null;
-    const hStarted = holterLog.startedAt ? new Date(holterLog.startedAt).toLocaleDateString("vi-VN") : "--";
-    const hUpdated = holterLog.updatedAt ? new Date(holterLog.updatedAt).toLocaleDateString("vi-VN") : "--";
+    const hStarted = holterLog.startedAt ? new Date(holterLog.startedAt).toLocaleDateString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' }) : "--";
+    const hUpdated = holterLog.updatedAt ? new Date(holterLog.updatedAt).toLocaleDateString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' }) : "--";
     const hAssessment = hBurden > 20 ? "⚠️ AFib Burden cao — khuyến nghị thăm khám tim mạch"
       : hBurden > 5 ? "🟡 Có một số phiên phát hiện AFib — cần theo dõi tiếp"
       : "🟢 Không phát hiện AFib đáng kể trong 7 ngày theo dõi";
     const holterRows = hlog.slice(0, 42).map(l => {
       const slotLabel = ["8h", "11h", "14h", "17h", "20h", "23h"][l.slot] || `#${l.slot + 1}`;
-      const ts = l.ts ? new Date(l.ts).toLocaleString("vi-VN") : "--";
+      const ts = l.ts ? new Date(l.ts).toLocaleString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' }) : "--";
       return `<tr>
         <td>Ngày ${l.day}/${slotLabel}</td>
         <td>${ts}</td>
@@ -2265,7 +2265,7 @@ function buildDoctorExportHtml(dashboard, exportToken) {
       _b6 += `<div style="border-top:1px solid #e2e8f0;padding-top:8px;margin-top:8px;font-size:12px">
     <strong>Kiểm tra phục hồi nhịp tim (HRR):</strong>
     HRR-1 phút = <strong>${hrrResult.hrr1min || "--"} BPM</strong>${hrrResult.grade ? " — " + hrrResult.grade : ""}
-    <span style="font-size:11px;color:#889;margin-left:8px">Đo lúc: ${hrrResult.savedAt ? new Date(hrrResult.savedAt).toLocaleDateString("vi-VN") : "--"}</span>
+    <span style="font-size:11px;color:#889;margin-left:8px">Đo lúc: ${hrrResult.savedAt ? new Date(hrrResult.savedAt).toLocaleDateString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' }) : "--"}</span>
   </div>`;
     }
     _b6 += "</div>";
@@ -2288,7 +2288,7 @@ function buildDoctorExportHtml(dashboard, exportToken) {
       const _afibN = _dms.filter(m => m.result?.classification === "afib").length;
       const _bpmColor = _avgBpm > 100 ? "#cc2244" : _avgBpm < 50 ? "#d97706" : "#16a34a";
       const _afibCell = _afibN > 0 ? `<span class="badge-red">⚠️ ${_afibN} AFib</span>` : `<span class="badge-green">Bình thường</span>`;
-      _tRows.push(`<tr><td>${_ds.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" })}</td><td>${_dms.length} lần</td><td style="font-weight:600;color:${_bpmColor}">${_avgBpm} BPM</td><td>${_avgSdnn}</td><td>${_afibCell}</td></tr>`);
+      _tRows.push(`<tr><td>${_ds.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", timeZone: 'Asia/Ho_Chi_Minh' })}</td><td>${_dms.length} lần</td><td style="font-weight:600;color:${_bpmColor}">${_avgBpm} BPM</td><td>${_avgSdnn}</td><td>${_afibCell}</td></tr>`);
     }
     if (_tRows.length > 0) {
       trendSection = `<div class="card card-blue">
@@ -2379,7 +2379,7 @@ function buildDoctorExportHtml(dashboard, exportToken) {
   // ── Section 10: Full pill protocols ───────────────────────────────────────
   let medicationFullSection = "";
   if (pillProtocols && pillProtocols.length > 0) {
-    const _medRows = pillProtocols.map(p => `<tr><td><strong>${p.medicineName}</strong></td><td>${p.dose || "--"}</td><td style="font-size:12px">${p.instructions || "--"}</td><td style="font-size:12px">${new Date(p.createdAt).toLocaleDateString("vi-VN")}</td></tr>`).join("");
+    const _medRows = pillProtocols.map(p => `<tr><td><strong>${p.medicineName}</strong></td><td>${p.dose || "--"}</td><td style="font-size:12px">${p.instructions || "--"}</td><td style="font-size:12px">${new Date(p.createdAt).toLocaleDateString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' })}</td></tr>`).join("");
     const _reminderHtml = reminders.length ? `<div style="margin-top:12px"><strong style="font-size:12.5px">Lịch nhắc uống thuốc:</strong><table style="margin-top:6px"><thead><tr><th>Tên thuốc</th><th>Giờ uống</th><th>Liều</th><th>Màu thuốc</th></tr></thead><tbody>${reminders.map(r => `<tr><td>${r.medicineName}</td><td>${r.time}</td><td>${r.dose || "--"}</td><td>${r.pillColor || "--"}</td></tr>`).join("")}</tbody></table></div>` : "";
     medicationFullSection = `<div class="card card-gray">
   <h2><span class="section-num gray">10</span> Phác đồ thuốc đang sử dụng (${pillProtocols.length} loại)</h2>
@@ -2392,7 +2392,7 @@ function buildDoctorExportHtml(dashboard, exportToken) {
 
   // ── Section 11: SOS events + Doctor Visit Prep + Hospitals ────────────────
   const _sosHtml = sosEvents && sosEvents.length > 0
-    ? `<div style="margin-bottom:14px"><strong style="font-size:12.5px;color:#cc2244">Lịch sử kích hoạt SOS (${sosEvents.length} lần):</strong><table style="margin-top:6px"><thead><tr><th>Ngày &amp; Giờ</th><th>Lý do</th><th>Trạng thái</th></tr></thead><tbody>${sosEvents.slice(0, 5).map(s => `<tr><td>${new Date(s.createdAt).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</td><td style="font-size:12px">${s.reason || "Kích hoạt thủ công"}</td><td><span class="${s.status === "cancelled" ? "badge-orange" : "badge-red"}">${s.status === "cancelled" ? "Đã hủy" : "Đã gửi"}</span></td></tr>`).join("")}</tbody></table></div>`
+    ? `<div style="margin-bottom:14px"><strong style="font-size:12.5px;color:#cc2244">Lịch sử kích hoạt SOS (${sosEvents.length} lần):</strong><table style="margin-top:6px"><thead><tr><th>Ngày &amp; Giờ</th><th>Lý do</th><th>Trạng thái</th></tr></thead><tbody>${sosEvents.slice(0, 5).map(s => `<tr><td>${new Date(s.createdAt).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: 'Asia/Ho_Chi_Minh' })}</td><td style="font-size:12px">${s.reason || "Kích hoạt thủ công"}</td><td><span class="${s.status === "cancelled" ? "badge-orange" : "badge-red"}">${s.status === "cancelled" ? "Đã hủy" : "Đã gửi"}</span></td></tr>`).join("")}</tbody></table></div>`
     : `<p style="color:#889;font-size:12.5px;margin:0 0 12px">Chưa có sự kiện SOS nào được ghi nhận — tốt!</p>`;
   const _prepHtml = doctorVisitPrep
     ? `<div style="border-top:1px solid #e2e8f0;padding-top:12px"><strong style="font-size:12.5px;display:block;margin-bottom:8px">✅ Checklist chuẩn bị buổi khám:</strong>${(doctorVisitPrep.checklist || []).map(c => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;font-size:12.5px"><span style="color:${c.done ? "#16a34a" : "#d97706"};font-size:14px">${c.done ? "☑" : "☐"}</span><span style="color:${c.done ? "#333" : "#888"}">${c.item}</span></div>`).join("")}${(doctorVisitPrep.questions || []).length ? `<div style="margin-top:12px"><strong style="font-size:12.5px;display:block;margin-bottom:6px">❓ Câu hỏi nên hỏi bác sĩ:</strong><ol style="margin:0;padding-left:18px;font-size:12.5px;line-height:1.8">${doctorVisitPrep.questions.map(q => `<li>${q}</li>`).join("")}</ol></div>` : ""}</div>`
@@ -2409,8 +2409,8 @@ function buildDoctorExportHtml(dashboard, exportToken) {
 
   // Nhật ký triệu chứng
   const symptomRows = symptoms.slice(0, 12).map(s =>
-    `<tr><td>${new Date(s.createdAt).toLocaleDateString("vi-VN")}</td>
-     <td>${new Date(s.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</td>
+    `<tr><td>${new Date(s.createdAt).toLocaleDateString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' })}</td>
+     <td>${new Date(s.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: 'Asia/Ho_Chi_Minh' })}</td>
      <td>${s.note}</td></tr>`
   ).join("");
 
@@ -2420,7 +2420,7 @@ function buildDoctorExportHtml(dashboard, exportToken) {
     const badge = cls === "afib" ? "badge-red" : cls === "elevated" ? "badge-orange" : "badge-green";
     const label = cls === "afib" ? "AFib" : cls === "elevated" ? "Cần theo dõi" : "Bình thường";
     return `<tr>
-      <td>${new Date(m.createdAt).toLocaleDateString("vi-VN")} ${new Date(m.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}</td>
+      <td>${new Date(m.createdAt).toLocaleDateString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' })} ${new Date(m.createdAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", timeZone: 'Asia/Ho_Chi_Minh' })}</td>
       <td>${m.type === "face" ? "Khuôn mặt" : "Ngón Trỏ"}</td>
       <td>${m.result?.bpm || "--"}</td>
       <td>${m.result?.sdnn || m.result?.hrvScore || "--"}</td>
@@ -2489,7 +2489,7 @@ tr:last-child td{border-bottom:none}
       <strong>Tuổi / Giới tính:</strong> ${user.age} tuổi / ${gender}<br>
       <strong>Bệnh lý nền:</strong> ${(user.conditions || []).join(", ") || "Chưa khai báo"}<br>
       <strong>Khoảng thời gian:</strong> ${periodStr}<br>
-      <strong>Ngày xuất báo cáo:</strong> ${new Date().toLocaleDateString("vi-VN")}
+      <strong>Ngày xuất báo cáo:</strong> ${new Date().toLocaleDateString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' })}
     </div>
   </div>
   <div class="logo">
@@ -2609,7 +2609,7 @@ ${prepSection}
   <strong>Đây KHÔNG phải là chẩn đoán y tế.</strong> Kết quả chỉ mang tính chất sàng lọc tham khảo ban đầu và cần được xác nhận bởi bác sĩ chuyên khoa tim mạch thông qua các phương tiện y tế được chứng nhận (Holter ECG, siêu âm tim...).
   Không sử dụng báo cáo này để tự điều trị hoặc thay thế lời khuyên của bác sĩ. Trong trường hợp khẩn cấp, hãy gọi 115 hoặc đến cơ sở y tế gần nhất.
   <br><br>
-  <span style="font-size:11px">HEARTSENSE v4.0 &nbsp;|&nbsp; Xuất ngày: ${new Date().toLocaleString("vi-VN")} &nbsp;|&nbsp; Token: ${exportToken || "direct"}</span>
+  <span style="font-size:11px">HEARTSENSE v4.0 &nbsp;|&nbsp; Xuất ngày: ${new Date().toLocaleString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' })} &nbsp;|&nbsp; Token: ${exportToken || "direct"}</span>
 </div>
 
 </body></html>`;

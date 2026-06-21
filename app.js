@@ -7478,7 +7478,7 @@ async function runMeasurement() {
           }
           state.liveQuality = Math.round(average(lastQualitySamples));
           if (el.liveBpmDisplay) {
-            el.liveBpmDisplay.textContent = lb ? `~${lb} BPM` : '—';
+            el.liveBpmDisplay.textContent = lb ? `~${Math.round(lb)} BPM` : '—';
             el.liveBpmDisplay.style.display = 'block';
           }
           if (el.liveQualityBar) {
