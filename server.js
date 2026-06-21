@@ -426,9 +426,15 @@ let _gmailTransporter = null;
 function getGmailTransporter() {
   if (!GMAIL_USER || !GMAIL_APP_PASSWORD) return null;
   if (!_gmailTransporter) {
+    // Dùng host/port rõ ràng + timeout thay vì service:"gmail" không có timeout
     _gmailTransporter = nodemailer.createTransport({
-      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false, // STARTTLS — hoạt động tốt hơn trên cloud (port 587 không bị chặn)
       auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+      connectionTimeout: 15000,  // 15s để kết nối TCP
+      greetingTimeout: 10000,    // 10s chờ SMTP greeting
+      socketTimeout: 20000,      // 20s idle timeout
     });
   }
   return _gmailTransporter;
@@ -436,14 +442,14 @@ function getGmailTransporter() {
 
 async function sendGmailEmail({ to, subject, html }) {
   const transporter = getGmailTransporter();
-  if (!transporter) return { sent: false, provider: "gmail", reason: "Chưa cấu hình GMAIL_USER / GMAIL_APP_PASSWORD trong .env" };
+  if (!transporter) return { sent: false, provider: "gmail", reason: "Chưa cấu hình GMAIL_USER / GMAIL_APP_PASSWORD" };
   if (!to) return { sent: false, provider: "gmail", reason: "missing_recipient" };
-  const info = await transporter.sendMail({
-    from: `"HEARTSENSE" <${GMAIL_USER}>`,
-    to,
-    subject,
-    html,
-  });
+  // Race với timeout 25s để tránh treo vô hạn khi SMTP bị chặn hoặc sai credentials
+  const sendPromise = transporter.sendMail({ from: `"HEARTSENSE" <${GMAIL_USER}>`, to, subject, html });
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Gmail SMTP timeout 25s — kiểm tra GMAIL_APP_PASSWORD trên Render Dashboard")), 25000)
+  );
+  const info = await Promise.race([sendPromise, timeoutPromise]);
   return { sent: true, provider: "gmail", id: info.messageId || null };
 }
 
@@ -3691,21 +3697,27 @@ async function handleSendRemoteParentReport(urlObject, body, res) {
   const personalMessage = String(body.personalMessage || "").trim().slice(0, 500);
   let emailResult = { sent: false, reason: "unknown_error" };
   try {
-    const dashboard = await buildDashboard(user.id);
+    // Timeout 20s cho buildDashboard phòng Supabase chậm
+    const dashboardPromise = buildDashboard(user.id);
+    const dashboardTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error("buildDashboard timeout 20s")), 20000));
+    const dashboard = await Promise.race([dashboardPromise, dashboardTimeout]);
+
     const latest = dashboard.latestMeasurement;
     const status = latest?.result?.classification === "afib" ? "⚠️ CÓ CẢNH BÁO" : latest?.result?.classification === "elevated" ? "Theo dõi" : "Bình thường";
+    console.log(`[SendReport] Gửi đến ${guardian.guardianEmail} cho ${user.fullName}...`);
     emailResult = await sendEmail({
       to: guardian.guardianEmail,
       subject: `HEARTSENSE – Báo cáo hàng ngày: ${user.fullName} – ${new Date().toLocaleDateString("vi-VN")}`,
       html: buildReportEmailHtml(user, latest, status, dashboard, personalMessage),
     });
+    console.log(`[SendReport] Kết quả: ${emailResult.sent ? "✓ OK" : "✗ " + emailResult.reason}`);
   } catch (e) {
     emailResult = { sent: false, reason: e.message };
     console.error("[SendReport] Lỗi:", e.message);
   }
 
-  appendLedgerEntry(user.id, "remote_parent.sent", "Gửi báo cáo đến guardian", { hasMessage: Boolean(personalMessage) });
-  sendJson(res, 200, { sent: emailResult.sent, message: emailResult.sent ? `Báo cáo đã gửi đến ${guardian.guardianEmail}` : `Chưa gửi được (${emailResult.reason})` });
+  appendLedgerEntry(user.id, "remote_parent.sent", "Gửi báo cáo đến guardian", { hasMessage: Boolean(personalMessage), sent: emailResult.sent });
+  sendJson(res, 200, { sent: emailResult.sent, message: emailResult.sent ? `✅ Báo cáo đã gửi đến ${guardian.guardianEmail}` : `❌ Chưa gửi được: ${emailResult.reason}` });
 }
 
 // ─── Cron Scheduler (#7, #16, #Fix-E) ────────────────────────────────────────
