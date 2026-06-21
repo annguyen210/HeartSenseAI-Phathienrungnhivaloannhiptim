@@ -423,44 +423,60 @@ async function sendResendEmail({ to, subject, html }) {
 
 // ─── Gmail SMTP (nodemailer) ──────────────────────────────────────────────────
 let _gmailTransporter = null;
-function getGmailTransporter() {
-  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) return null;
-  if (!_gmailTransporter) {
-    _gmailTransporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
-      connectionTimeout: 15000,
-      greetingTimeout: 10000,
-      socketTimeout: 20000,
-    });
-    // Verify kết nối lúc khởi động — lỗi sẽ hiện rõ trong Render Logs
-    _gmailTransporter.verify((err) => {
-      if (err) {
-        console.error(`[Gmail SMTP] ❌ Kết nối thất bại: ${err.message}`);
-        if (err.message.includes("Invalid login") || err.message.includes("Username and Password")) {
-          console.error("[Gmail SMTP] → App Password sai hoặc chưa bật 2-Factor Authentication trên Gmail");
-        } else if (err.message.includes("ETIMEDOUT") || err.message.includes("ECONNREFUSED")) {
-          console.error("[Gmail SMTP] → Render đang chặn port 587, thử port 465");
-        }
-        _gmailTransporter = null; // reset để thử lại lần sau
+let _gmailReady = false;
+let _gmailLastError = null;
+
+function _createAndVerifyGmail(port, secure, label) {
+  const t = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port,
+    secure,
+    auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
+  });
+  t.verify((err) => {
+    if (err) {
+      console.error(`[Gmail SMTP] ❌ ${label} thất bại: ${err.message}`);
+      _gmailLastError = `${label}: ${err.message}`;
+      if (port === 587) {
+        console.log("[Gmail SMTP] Thử port 465 (SSL)...");
+        _createAndVerifyGmail(465, true, "port 465 SSL");
       } else {
-        console.log(`[Gmail SMTP] ✅ Kết nối OK — sẵn sàng gửi email từ ${GMAIL_USER}`);
+        console.error("[Gmail SMTP] ❌ Cả port 587 và 465 đều thất bại.");
+        console.error("[Gmail SMTP] → Kiểm tra: (1) GMAIL_USER và GMAIL_APP_PASSWORD đúng chưa, (2) Bật xác minh 2 bước trên Gmail, (3) App Password tạo tại myaccount.google.com/apppasswords");
       }
-    });
-  }
-  return _gmailTransporter;
+    } else {
+      console.log(`[Gmail SMTP] ✅ ${label} OK — sẵn sàng gửi từ ${GMAIL_USER}`);
+      _gmailTransporter = t;
+      _gmailReady = true;
+      _gmailLastError = null;
+    }
+  });
 }
 
+function initGmailTransporter() {
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+    _gmailLastError = "GMAIL_USER hoặc GMAIL_APP_PASSWORD chưa set trong Render Dashboard";
+    console.error(`[Gmail SMTP] ❌ ${_gmailLastError}`);
+    return;
+  }
+  console.log(`[Gmail SMTP] Đang kết nối với ${GMAIL_USER} (pass length=${GMAIL_APP_PASSWORD.length})...`);
+  _createAndVerifyGmail(587, false, "port 587 STARTTLS");
+}
+
+// Khởi động Gmail khi server start
+initGmailTransporter();
+
 async function sendGmailEmail({ to, subject, html }) {
-  const transporter = getGmailTransporter();
-  if (!transporter) return { sent: false, provider: "gmail", reason: "Chưa cấu hình GMAIL_USER / GMAIL_APP_PASSWORD" };
+  if (!_gmailReady || !_gmailTransporter) {
+    return { sent: false, provider: "gmail", reason: _gmailLastError || "Gmail SMTP chưa sẵn sàng" };
+  }
   if (!to) return { sent: false, provider: "gmail", reason: "missing_recipient" };
-  // Race với timeout 25s để tránh treo vô hạn khi SMTP bị chặn hoặc sai credentials
-  const sendPromise = transporter.sendMail({ from: `"HEARTSENSE" <${GMAIL_USER}>`, to, subject, html });
+  const sendPromise = _gmailTransporter.sendMail({ from: `"HEARTSENSE" <${GMAIL_USER}>`, to, subject, html });
   const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("Gmail SMTP timeout 25s — kiểm tra GMAIL_APP_PASSWORD trên Render Dashboard")), 25000)
+    setTimeout(() => reject(new Error("Gmail sendMail timeout 25s")), 25000)
   );
   const info = await Promise.race([sendPromise, timeoutPromise]);
   return { sent: true, provider: "gmail", id: info.messageId || null };
@@ -3838,6 +3854,27 @@ function startAutoReportScheduler() {
   console.log("[Cron] Scheduler khởi động – kiểm tra mỗi phút. Cũng nhận ping từ /api/cron.");
 }
 
+// ─── Email status endpoint — diagnostic không lộ thông tin nhạy cảm ──────────
+function handleEmailStatus(res) {
+  sendJson(res, 200, {
+    gmail: {
+      configured: !!(GMAIL_USER && GMAIL_APP_PASSWORD),
+      user: GMAIL_USER || null,
+      passwordLength: GMAIL_APP_PASSWORD ? GMAIL_APP_PASSWORD.length : 0,
+      ready: _gmailReady,
+      error: _gmailLastError || null,
+    },
+    resend: {
+      configured: !!process.env.RESEND_API_KEY,
+      from: process.env.EMAIL_FROM || null,
+      note: "onboarding@resend.dev chỉ gửi được tới email chủ tài khoản Resend — cần verified domain để gửi tuỳ ý",
+    },
+    recommendation: _gmailReady
+      ? "✅ Gmail đã sẵn sàng — email sẽ gửi được đến bất kỳ địa chỉ nào"
+      : "❌ Gmail chưa sẵn sàng — kiểm tra GMAIL_USER và GMAIL_APP_PASSWORD trong Render Dashboard",
+  });
+}
+
 // ─── External cron ping endpoint (#Fix-E) ─────────────────────────────────────
 // Dùng cron-job.org hoặc UptimeRobot để ping /api/cron?secret=<CRON_SECRET> mỗi 5–10 phút
 // → giữ server thức + chạy bù báo cáo nếu server vừa ngủ dậy
@@ -4242,6 +4279,7 @@ async function handleRequest(req, res) {
   if (req.method === "POST" && p === "/api/medications/adherence") { await handleMedicationAdherence(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/measurements/delete") { await handleDeleteMeasurement(urlObject, await parseBody(req), res); return; }
   if (req.method === "GET" && p === "/api/population-stats") { handlePopulationStats(res); return; }
+  if (req.method === "GET" && p === "/api/email-status") { handleEmailStatus(res); return; }
   if (req.method === "GET" && p === "/api/cron") { await handleCronPing(urlObject, res); return; }
   // New endpoints (List Update 1 & 2)
   if (req.method === "POST" && p === "/api/expert-mode") { await handleExpertMode(urlObject, await parseBody(req), res); return; }
