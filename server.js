@@ -19,9 +19,9 @@ if (!process.env.RESEND_API_KEY) console.warn("[WARN] RESEND_API_KEY chưa đư�
 const GMAIL_USER = process.env.GMAIL_USER || "";
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || "";
 if (GMAIL_USER && GMAIL_APP_PASSWORD) {
-  console.log(`[Gmail SMTP] Sẵn sàng gửi email từ ${GMAIL_USER}`);
+  console.log(`[Gmail SMTP] Biến đã set: GMAIL_USER=${GMAIL_USER}, APP_PASSWORD length=${GMAIL_APP_PASSWORD.length}`);
 } else {
-  console.warn("[WARN] GMAIL_USER / GMAIL_APP_PASSWORD chưa set — sẽ dùng Resend.");
+  console.error(`[Gmail SMTP] ❌ CHƯA SET: GMAIL_USER="${GMAIL_USER}" GMAIL_APP_PASSWORD="${GMAIL_APP_PASSWORD ? "***set***" : "TRỐNG"}"`);
 }
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
@@ -426,15 +426,28 @@ let _gmailTransporter = null;
 function getGmailTransporter() {
   if (!GMAIL_USER || !GMAIL_APP_PASSWORD) return null;
   if (!_gmailTransporter) {
-    // Dùng host/port rõ ràng + timeout thay vì service:"gmail" không có timeout
     _gmailTransporter = nodemailer.createTransport({
       host: "smtp.gmail.com",
       port: 587,
-      secure: false, // STARTTLS — hoạt động tốt hơn trên cloud (port 587 không bị chặn)
+      secure: false,
       auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
-      connectionTimeout: 15000,  // 15s để kết nối TCP
-      greetingTimeout: 10000,    // 10s chờ SMTP greeting
-      socketTimeout: 20000,      // 20s idle timeout
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
+    });
+    // Verify kết nối lúc khởi động — lỗi sẽ hiện rõ trong Render Logs
+    _gmailTransporter.verify((err) => {
+      if (err) {
+        console.error(`[Gmail SMTP] ❌ Kết nối thất bại: ${err.message}`);
+        if (err.message.includes("Invalid login") || err.message.includes("Username and Password")) {
+          console.error("[Gmail SMTP] → App Password sai hoặc chưa bật 2-Factor Authentication trên Gmail");
+        } else if (err.message.includes("ETIMEDOUT") || err.message.includes("ECONNREFUSED")) {
+          console.error("[Gmail SMTP] → Render đang chặn port 587, thử port 465");
+        }
+        _gmailTransporter = null; // reset để thử lại lần sau
+      } else {
+        console.log(`[Gmail SMTP] ✅ Kết nối OK — sẵn sàng gửi email từ ${GMAIL_USER}`);
+      }
     });
   }
   return _gmailTransporter;
