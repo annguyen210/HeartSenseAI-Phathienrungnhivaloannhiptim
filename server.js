@@ -3748,34 +3748,37 @@ async function runSchedulerCheck() {
     const isMissed = vnTotalMin > schedTotalMin; // past scheduled time, not yet sent
     if (!isOnTime && !isMissed) continue;
 
+    let emailResult = { sent: false, reason: "not_attempted" };
     try {
       const dashboard = await buildDashboard(user.id);
       const latest = dashboard.latestMeasurement;
       const status = latest?.result?.classification === "afib" ? "⚠️ CÓ CẢNH BÁO"
         : latest?.result?.classification === "elevated" ? "Theo dõi" : "Bình thường";
       const aiComment = await generateGuardianAiComment(user, latest?.result, vnNow.toLocaleString("vi-VN")).catch(() => null);
-      const emailResult = await sendEmail({
+      emailResult = await sendEmail({
         to: user.guardian.guardianEmail,
         subject: `HEARTSENSE – Báo cáo tự động: ${escHtml(user.fullName)} – ${vnNow.toLocaleDateString("vi-VN")}`,
         html: buildReportEmailHtml(user, latest, status, dashboard, "", aiComment || ""),
       });
-      // Luôn lưu lastAttemptDate để tránh retry vô hạn trong ngày dù email fail
+      if (emailResult.sent) {
+        appendLedgerEntry(user.id, "remote_parent.auto_sent", "Tu dong gui bao cao theo lich", { email: user.guardian.guardianEmail, scheduledTime: schedTime, catchUp: isMissed });
+        console.log(`[AutoReport] ${isMissed ? "[catch-up] " : ""}OK → ${user.guardian.guardianEmail} (${user.fullName})`);
+      } else {
+        console.warn(`[AutoReport] Email fail ${user.fullName}: ${emailResult.reason}`);
+      }
+    } catch (err) {
+      emailResult = { sent: false, reason: err.message };
+      console.error(`[AutoReport] Lỗi ${user.fullName}: ${err.message}`);
+    } finally {
+      // Luôn lưu lastSentDate dù thành công hay thất bại — tránh retry vô hạn cả ngày
       const allUsers = readJson("users");
       const u = allUsers.find((x) => x.id === user.id);
       if (u?.guardian?.reportSchedule) {
-        u.guardian.reportSchedule.lastSentDate = vnDateStr; // đánh dấu đã xử lý hôm nay
+        u.guardian.reportSchedule.lastSentDate = vnDateStr;
         u.guardian.reportSchedule.lastSentAt = nowUTC.toISOString();
         u.guardian.reportSchedule.lastSentOk = emailResult.sent;
         writeJson("users", allUsers);
       }
-      if (emailResult.sent) {
-        appendLedgerEntry(user.id, "remote_parent.auto_sent", "Tu dong gui bao cao theo lich", { email: user.guardian.guardianEmail, scheduledTime: schedTime, catchUp: isMissed });
-        console.log(`[AutoReport] ${isMissed ? "[catch-up]" : ""} Gui den ${user.guardian.guardianEmail} cho ${user.fullName}`);
-      } else {
-        console.warn(`[AutoReport] Email fail cho ${user.fullName}: ${emailResult.reason}`);
-      }
-    } catch (err) {
-      console.error(`[AutoReport] Loi user ${user.id}: ${err.message}`);
     }
   }
 
