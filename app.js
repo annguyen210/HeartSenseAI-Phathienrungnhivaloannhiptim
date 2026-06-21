@@ -9388,23 +9388,37 @@ async function savePillProtocol(event) {
 // ─── Remote Parent ────────────────────────────────────────────────────────────
 async function sendParentReport() {
   if (!state.token || !state.user) { setAuthState("Cần đăng nhập.", "error"); return; }
+  const guardian = state.user.guardian || {};
+  if (!guardian.guardianEmail) {
+    showToast("Chưa có email người thân. Vào Hồ sơ → Người thân để cài đặt.", "warning");
+    return;
+  }
   const personalMessage = el.parentReportMessage?.value?.trim() || "";
+  const sendBtn = document.getElementById("sendParentReportBtn");
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "⏳ Đang gửi..."; }
   try {
     if (el.parentReportStatus) el.parentReportStatus.textContent = "Đang gửi...";
-    if (el.remoteParentInfoStatus) { el.remoteParentInfoStatus.textContent = "Đang gửi báo cáo..."; el.remoteParentInfoStatus.className = "muted"; }
+    if (el.remoteParentInfoStatus) { el.remoteParentInfoStatus.textContent = "Đang gửi báo cáo..."; }
     const r = await api(`/api/users/${state.user.id}/remote-parent/send`, {
       method: "POST",
       body: JSON.stringify({ token: state.token, personalMessage }),
     });
-    if (el.parentReportStatus) el.parentReportStatus.textContent = r.message;
-    if (el.remoteParentInfoStatus) {
-      el.remoteParentInfoStatus.textContent = r.sent ? `Đã gửi lúc ${new Date().toLocaleTimeString("vi-VN")}` : `Lỗi: ${r.message}`;
-      el.remoteParentInfoStatus.className = r.sent ? "badge safe" : "badge warn";
+    if (r.sent) {
+      showToast(`✅ Đã gửi báo cáo đến ${guardian.guardianEmail}`, "success");
+      if (el.parentReportStatus) el.parentReportStatus.textContent = r.message;
+      if (el.remoteParentInfoStatus) { el.remoteParentInfoStatus.textContent = `✅ Đã gửi lúc ${new Date().toLocaleTimeString("vi-VN")} → ${guardian.guardianEmail}`; el.remoteParentInfoStatus.style.color = "#059669"; }
+      if (el.parentReportMessage) el.parentReportMessage.value = "";
+    } else {
+      showToast(`❌ Không gửi được: ${r.message}`, "error");
+      if (el.parentReportStatus) el.parentReportStatus.textContent = r.message;
+      if (el.remoteParentInfoStatus) { el.remoteParentInfoStatus.textContent = `❌ ${r.message}`; el.remoteParentInfoStatus.style.color = "#dc2626"; }
     }
-    if (r.sent && el.parentReportMessage) el.parentReportMessage.value = "";
   } catch (err) {
+    showToast(`Lỗi gửi email: ${err.message}`, "error");
     if (el.parentReportStatus) el.parentReportStatus.textContent = `Lỗi: ${err.message}`;
-    if (el.remoteParentInfoStatus) { el.remoteParentInfoStatus.textContent = `Lỗi: ${err.message}`; el.remoteParentInfoStatus.className = "badge warn"; }
+    if (el.remoteParentInfoStatus) { el.remoteParentInfoStatus.textContent = `❌ Lỗi: ${err.message}`; el.remoteParentInfoStatus.style.color = "#dc2626"; }
+  } finally {
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "📨 Gửi báo cáo ngay hôm nay"; }
   }
 }
 
@@ -10256,9 +10270,10 @@ async function sendAiReportToFamily() {
       body: JSON.stringify({ token: state.token }),
     });
     if (resp.sent) {
-      showToast(`Đã gửi phân tích AI đến ${resp.to || guardian.guardianEmail}`, "success");
+      const label = resp.aiUsed ? "Báo cáo AI" : "Báo cáo sức khoẻ";
+      showToast(`✅ ${label} đã gửi đến ${resp.to || guardian.guardianEmail}`, "success");
     } else {
-      showToast(resp.message || "Chưa gửi được — kiểm tra cấu hình email", "error");
+      showToast(`❌ Không gửi được: ${resp.message || "Kiểm tra cấu hình email trên Render Dashboard"}`, "error");
     }
   } catch (err) {
     const msg = err.message || "Lỗi khi gửi báo cáo";

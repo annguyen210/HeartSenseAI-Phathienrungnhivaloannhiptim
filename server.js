@@ -447,20 +447,31 @@ async function sendGmailEmail({ to, subject, html }) {
   return { sent: true, provider: "gmail", id: info.messageId || null };
 }
 
-// ─── Hàm gửi email thống nhất: ưu tiên Gmail, fallback Resend ─────────────────
+// ─── Hàm gửi email thống nhất: ưu tiên Gmail (gửi được mọi email), fallback Resend ──
 async function sendEmail({ to, subject, html }) {
   if (!to) return { sent: false, reason: "missing_recipient" };
-  // Thử Gmail trước nếu đã cấu hình
+  // Gmail ưu tiên — không giới hạn email đích
   if (GMAIL_USER && GMAIL_APP_PASSWORD) {
     try {
       const result = await sendGmailEmail({ to, subject, html });
-      if (result.sent) return result;
+      if (result.sent) {
+        console.log(`[Email] Gmail → ${to} ✓`);
+        return result;
+      }
+      console.warn("[Email] Gmail không gửi được:", result.reason);
     } catch (e) {
-      console.warn("[Gmail] Lỗi, thử Resend:", e.message);
+      console.warn("[Email] Gmail lỗi:", e.message);
+      _gmailTransporter = null; // reset để lần sau thử lại
     }
   }
-  // Fallback Resend
-  return sendResendEmailWithRetry({ to, subject, html });
+  // Fallback Resend (lưu ý: onboarding@resend.dev chỉ gửi được đến email chủ tài khoản Resend)
+  if (!process.env.RESEND_API_KEY) {
+    console.warn("[Email] Không có Gmail lẫn Resend — cần set GMAIL_USER + GMAIL_APP_PASSWORD trên Render Dashboard");
+    return { sent: false, reason: "Chưa cấu hình email (cần GMAIL_USER + GMAIL_APP_PASSWORD trên Render Dashboard)" };
+  }
+  const result = await sendResendEmailWithRetry({ to, subject, html });
+  if (!result.sent) console.warn(`[Email] Resend thất bại (${result.reason}) — có thể Resend chỉ gửi được tới email chủ tài khoản Resend khi dùng domain onboarding@resend.dev`);
+  return result;
 }
 
 function buildReportEmailHtml(user, latest, status, dashboard, personalMessage = "", aiComment = "") {
@@ -2926,38 +2937,54 @@ QUY TẮC:
     safetySettings: [{ category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }],
   });
 
-  try {
-    const geminiRes = await requestJson(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
-      body: payload,
-    });
+  // Thử tạo phân tích AI — nếu fail vẫn gửi báo cáo thường
+  let aiAnalysis = null;
+  if (GEMINI_API_KEY) {
+    try {
+      const geminiRes = await requestJson(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+        body: payload,
+      });
+      aiAnalysis = geminiRes?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+      if (!aiAnalysis) console.warn("[AiFamilyReport] Gemini trả về trống, gửi báo cáo thường.");
+    } catch (geminiErr) {
+      console.warn("[AiFamilyReport] Gemini lỗi, fallback báo cáo thường:", geminiErr.message);
+    }
+  }
 
-    const aiAnalysis = geminiRes?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    if (!aiAnalysis) {
-      sendJson(res, 503, { error: "AI không tạo được phân tích — thử lại sau vài giây." });
-      return;
+  try {
+    let emailHtml, emailSubject;
+    const classLabel = r.classification === "afib" ? "⚠️ PHÁT HIỆN BẤT THƯỜNG" : r.classification === "elevated" ? "⚡ Cần theo dõi" : "✅ Bình thường";
+    if (aiAnalysis) {
+      emailHtml = buildAiAnalysisEmailHtml(user, r, aiAnalysis, guardian.guardianName);
+      emailSubject = `HEARTSENSE – Báo cáo AI: ${user.fullName} – ${classLabel} – ${new Date().toLocaleDateString("vi-VN")}`;
+    } else {
+      // Fallback: báo cáo thường không cần AI
+      const dashboard = await buildDashboard(user.id);
+      const status = r.classification === "afib" ? "⚠️ CÓ CẢNH BÁO" : r.classification === "elevated" ? "Theo dõi" : "Bình thường";
+      emailHtml = buildReportEmailHtml(user, latest, status, dashboard, "");
+      emailSubject = `HEARTSENSE – Báo cáo sức khoẻ: ${user.fullName} – ${classLabel} – ${new Date().toLocaleDateString("vi-VN")}`;
     }
 
-    const emailHtml = buildAiAnalysisEmailHtml(user, r, aiAnalysis, guardian.guardianName);
-    const classLabel = r.classification === "afib" ? "⚠️ PHÁT HIỆN BẤT THƯỜNG" : r.classification === "elevated" ? "⚡ Cần theo dõi" : "✅ Bình thường";
     const emailResult = await sendEmail({
       to: guardian.guardianEmail,
-      subject: `HEARTSENSE – Báo cáo AI: ${user.fullName} – ${classLabel} – ${new Date().toLocaleDateString("vi-VN")}`,
+      subject: emailSubject,
       html: emailHtml,
     });
 
-    appendLedgerEntry(user.id, "pocket_cardiologist.family_report", "Gửi phân tích AI cho người thân", { to: guardian.guardianEmail, sent: emailResult.sent });
+    appendLedgerEntry(user.id, "pocket_cardiologist.family_report", "Gửi phân tích AI cho người thân", { to: guardian.guardianEmail, sent: emailResult.sent, aiUsed: !!aiAnalysis });
     sendJson(res, 200, {
       sent: emailResult.sent,
       to: guardian.guardianEmail,
+      aiUsed: !!aiAnalysis,
       message: emailResult.sent
-        ? `Báo cáo phân tích AI đã gửi đến ${guardian.guardianEmail}`
-        : `Không gửi được email (${emailResult.reason}). Kiểm tra RESEND_API_KEY.`,
+        ? `${aiAnalysis ? "Báo cáo AI" : "Báo cáo sức khoẻ"} đã gửi đến ${guardian.guardianEmail}`
+        : `Không gửi được email: ${emailResult.reason}`,
     });
   } catch (err) {
     console.error("[AiFamilyReport]", err.message);
-    sendJson(res, 500, { error: `Lỗi khi tạo báo cáo: ${err.message}` });
+    sendJson(res, 500, { error: `Lỗi khi gửi báo cáo: ${err.message}` });
   }
 }
 
