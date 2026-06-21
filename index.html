@@ -2244,6 +2244,19 @@
 </div>`,
 
 'fd-hrv-advanced': `
+<p>👉 Không phải chỉ nhìn BPM cao hay thấp là kết luận rung nhĩ. BPM chỉ cho biết mỗi phút tim đập bao nhiêu lần. Còn rung nhĩ được nghi ngờ chủ yếu nhờ phân tích nhịp có đều hay không, tức là khoảng cách giữa từng nhịp tim.<br><br>
+Khi đo PPG bằng camera, app không chỉ lấy ra một con số BPM. Nó lấy ra cả sóng mạch theo thời gian. Mỗi đỉnh sóng tương ứng với một nhịp tim. Từ các đỉnh đó, phần mềm tính được khoảng cách giữa hai nhịp liên tiếp, gọi là RR interval hoặc beat-to-beat interval.<br><br>
+Ở người bình thường, các khoảng cách này có dao động nhẹ nhưng vẫn có quy luật. Ví dụ: 820ms, 810ms, 830ms, 815ms. Còn trong rung nhĩ, tâm nhĩ co bóp hỗn loạn, làm tín hiệu truyền xuống thất không đều. Vì vậy khoảng cách giữa các nhịp trở nên không đều một cách hỗn loạn, ví dụ: 610ms, 980ms, 720ms, 1150ms, 640ms. Đây gọi là đặc điểm irregularly irregular rhythm.<br><br>
+Vì vậy app dùng BPM làm điểm bắt đầu, nhưng để nghi ngờ AFib thì nó phân tích thêm:<br>
+• Khoảng cách giữa các nhịp tim có đều không.<br>
+• Độ biến thiên RR interval.<br>
+• HRV như SDNN, RMSSD, pNN50.<br>
+• Irregularity Index.<br>
+• Sample Entropy: nhịp có hỗn loạn không.<br>
+• Poincare SD1/SD2: hình phân bố nhịp có bất thường không.<br>
+• Temporal consistency: bất thường có kéo dài hay chỉ là nhiễu tạm thời.<br>
+• Chất lượng tín hiệu có đủ tốt không.<br>
+• Có dấu hiệu ngoại tâm thu PAC/PVC gây nhầm lẫn không.</p>
 <h4>🔬 SDNN, RMSSD, pNN50 — Giải thích từng chỉ số HRV</h4>
 <p>HRV Score (0–100) là chỉ số tổng hợp. Phần này giải thích 3 chỉ số thô bên dưới — các chỉ số này xuất hiện trong báo cáo cho bác sĩ và là chuẩn quốc tế từ 1996.</p>
 <table>
