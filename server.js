@@ -2863,10 +2863,7 @@ async function handleSendAiFamilyReport(urlObject, body, res) {
     sendJson(res, 400, { error: "Chưa cấu hình email người thân. Vào Hồ sơ → Người thân để thêm email." });
     return;
   }
-  if (!GEMINI_API_KEY) {
-    sendJson(res, 503, { error: "Gemini AI chưa được cấu hình — không thể tạo phân tích tự động." });
-    return;
-  }
+  // Không chặn ở đây nếu thiếu GEMINI_API_KEY — sẽ fallback báo cáo thường bên dưới
 
   const allMs = readJson("measurements")
     .filter(m => m.userId === user.id && (m.type === "face" || m.type === "finger"))
@@ -3573,13 +3570,14 @@ Kiểm tra TẤT CẢ các cặp có thể tương tác. Trả lời CHÍNH XÁC
 Quy tắc phân loại: NGUY_HIEM = chống chỉ định/nguy cơ tử vong/chảy máu nội tạng; CANH_BAO = cần theo dõi sát/điều chỉnh liều; CHU_Y = tương tác nhẹ. Nếu không có tương tác: safe=true, interactions=[].`;
 
   try {
+    const drugPayload = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
+    });
     const resp = await requestJson(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
-      }),
+      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(drugPayload) },
+      body: drugPayload,
     });
     const text = resp?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const clean = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
@@ -3749,16 +3747,20 @@ async function runSchedulerCheck() {
         subject: `HEARTSENSE – Báo cáo tự động: ${escHtml(user.fullName)} – ${vnNow.toLocaleDateString("vi-VN")}`,
         html: buildReportEmailHtml(user, latest, status, dashboard, "", aiComment || ""),
       });
+      // Luôn lưu lastAttemptDate để tránh retry vô hạn trong ngày dù email fail
+      const allUsers = readJson("users");
+      const u = allUsers.find((x) => x.id === user.id);
+      if (u?.guardian?.reportSchedule) {
+        u.guardian.reportSchedule.lastSentDate = vnDateStr; // đánh dấu đã xử lý hôm nay
+        u.guardian.reportSchedule.lastSentAt = nowUTC.toISOString();
+        u.guardian.reportSchedule.lastSentOk = emailResult.sent;
+        writeJson("users", allUsers);
+      }
       if (emailResult.sent) {
-        const allUsers = readJson("users");
-        const u = allUsers.find((x) => x.id === user.id);
-        if (u?.guardian?.reportSchedule) {
-          u.guardian.reportSchedule.lastSentDate = vnDateStr;
-          u.guardian.reportSchedule.lastSentAt = nowUTC.toISOString();
-          writeJson("users", allUsers);
-        }
         appendLedgerEntry(user.id, "remote_parent.auto_sent", "Tu dong gui bao cao theo lich", { email: user.guardian.guardianEmail, scheduledTime: schedTime, catchUp: isMissed });
         console.log(`[AutoReport] ${isMissed ? "[catch-up]" : ""} Gui den ${user.guardian.guardianEmail} cho ${user.fullName}`);
+      } else {
+        console.warn(`[AutoReport] Email fail cho ${user.fullName}: ${emailResult.reason}`);
       }
     } catch (err) {
       console.error(`[AutoReport] Loi user ${user.id}: ${err.message}`);
