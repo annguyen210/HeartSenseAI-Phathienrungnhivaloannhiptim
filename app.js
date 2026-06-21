@@ -10495,6 +10495,8 @@ async function askPocketCardiologist(question, evt) {
   let answered = false;
 
   // 1. Try Gemini AI (server-side) — gửi kèm context để hoạt động cả khi không có session
+  const _pcAbort = new AbortController();
+  const _pcAbortTimer = setTimeout(() => _pcAbort.abort(), 42000);
   try {
     const ctx = {
       result: r,
@@ -10505,7 +10507,9 @@ async function askPocketCardiologist(question, evt) {
     const resp = await api("/api/pocket-cardiologist", {
       method: "POST",
       body: JSON.stringify({ token: state.token || "", question: q, history: _pcChatHistory, ctx }),
+      signal: _pcAbort.signal,
     });
+    clearTimeout(_pcAbortTimer);
     if (resp.answer && !resp.fallback) {
       document.getElementById(thinkingId)?.remove();
       _pcChatHistory.push({ role: "user", text: q });
@@ -10515,6 +10519,7 @@ async function askPocketCardiologist(question, evt) {
       answered = true;
     }
   } catch (e) {
+    clearTimeout(_pcAbortTimer);
     console.warn("[Pocket Cardiologist] Gemini lỗi:", e.message);
   }
 

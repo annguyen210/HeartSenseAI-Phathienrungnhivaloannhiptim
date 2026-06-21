@@ -25,7 +25,7 @@ if (GMAIL_USER && GMAIL_APP_PASSWORD) {
 }
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
-const GEMINI_API_URL_FALLBACK = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+const GEMINI_API_URL_FALLBACK = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
 if (!GEMINI_API_KEY) console.warn("[WARN] GEMINI_API_KEY chưa set — Bác sĩ ảo sẽ dùng rule-based fallback.");
 
 const MIME_TYPES = {
@@ -305,7 +305,7 @@ function requestJson(urlString, options = {}) {
         resolve(parsed);
       });
     });
-    request.setTimeout(6000, () => { request.destroy(); reject(new Error("Request timeout")); });
+    request.setTimeout(35000, () => { request.destroy(); reject(new Error("Request timeout")); });
     request.on("error", reject);
     if (options.body) request.write(options.body);
     request.end();
