@@ -4860,6 +4860,33 @@
 </div>`,
 
 'fd-register': `
+<p>👉 Phần mềm bảo mật bằng nhiều lớp: mật khẩu được hash một chiều, đăng nhập dùng session token, API kiểm tra token trước khi trả dữ liệu, có chống CSRF cơ bản, giới hạn đăng nhập sai, dữ liệu được tách theo userId và dữ liệu y tế local có cơ chế mã hóa bằng Web Crypto AES-GCM. Ngoài ra người dùng vẫn có thể đo thử không cần tài khoản nếu chưa muốn lưu thông tin cá nhân.</p>
+<p>👉 Không đăng ký tài khoản vẫn đo được bình thường, miễn là trình duyệt cho quyền camera và người dùng đặt ngón tay đúng lên camera/flash.<br>
+Khi không đăng nhập, app vẫn có thể:<br>
+• Bật camera.<br>
+• Đo ngón tay bằng Finger PPG.<br>
+• Đo khuôn mặt bằng Face rPPG.<br>
+• Tính BPM.<br>
+• Tính HRV cơ bản.<br>
+• Hiển thị chất lượng tín hiệu.<br>
+• Hiển thị kết quả local trên máy.<br>
+Nhưng nếu không đăng nhập thì sẽ bị giới hạn ở phần lưu trữ và cá nhân hóa:<br>
+• Không lưu lịch sử đo lâu dài theo tài khoản.<br>
+• Không có baseline Heart-Print cá nhân.<br>
+• Không có dashboard dài hạn đầy đủ.<br>
+• Không gửi báo cáo cho người thân.<br>
+• Không dùng đầy đủ SOS/email theo hồ sơ người giám hộ.<br>
+• Không cá nhân hóa sâu theo tuổi, bệnh nền, thuốc, lịch sử đo.</p>
+<p>👉 Sai tuổi ảnh hưởng đến gì?<br>
+Tuổi không ảnh hưởng trực tiếp đến việc camera đọc tín hiệu PPG. Tức là sóng ngón tay, BPM, RR intervals, HRV cơ bản vẫn được đo từ camera như bình thường.<br>
+Nhưng tuổi ảnh hưởng đến các phần phân tích nguy cơ và cá nhân hóa, ví dụ:<br>
+• Stroke Risk Score: tuổi càng cao thì điểm nguy cơ đột quỵ thường tăng.<br>
+• Tuổi tim sinh học: nếu nhập sai tuổi, kết quả tuổi tim sinh học sẽ lệch.<br>
+• HRV theo tuổi: HRV của người lớn tuổi và người trẻ được diễn giải khác nhau.<br>
+• CHA2DS2-VASc / HAS-BLED: một số thang điểm nguy cơ tim mạch có thành phần theo tuổi.<br>
+• Liều vận động an toàn hôm nay: tuổi là một yếu tố khi đưa ra khuyến nghị vận động.<br>
+• So sánh với dân số cùng độ tuổi: nhập sai tuổi thì benchmark sẽ so với nhóm tuổi sai.<br>
+• Dự báo nguy cơ 72h / 24h / IRS cá nhân: các mô hình nguy cơ dùng tuổi như một biến đầu vào.</p>
 <h4>📋 Tạo Tài khoản HeartSense — Registration Guide</h4>
 <p>Tài khoản HeartSense là chìa khóa để toàn bộ dữ liệu đo tim của bạn được lưu trữ an toàn, đồng bộ giữa các thiết bị và có thể chia sẻ với bác sĩ.</p>
 <h4>📋 Thông tin cần điền khi đăng ký</h4>
