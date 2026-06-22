@@ -489,19 +489,20 @@ async function sendGoogleAppsScriptEmail({ to, subject, html }) {
   const secret = process.env.APPS_SCRIPT_SECRET || "heartsense2024";
   if (!url) return { sent: false, provider: "apps_script", reason: "APPS_SCRIPT_URL chưa set" };
   const body = JSON.stringify({ secret, to, subject, html });
-  // node-fetch với redirect:"manual" để tự handle redirect — giữ POST + body qua mọi hop
+  // Hop 0: POST /exec → Apps Script chạy doPost → trả 302 redirect
+  // Hop 1+: GET echo URL → lấy kết quả JSON từ ContentService
   let currentUrl = url;
   for (let hop = 0; hop < 5; hop++) {
+    const isFirst = hop === 0;
     const res = await nodeFetch(currentUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
+      method: isFirst ? "POST" : "GET",
+      headers: isFirst ? { "Content-Type": "application/json" } : {},
+      body: isFirst ? body : undefined,
       redirect: "manual",
       timeout: 30000,
     });
     if (res.status === 301 || res.status === 302 || res.status === 303) {
       const loc = res.headers.get("location");
-      console.log(`[AppsScript] redirect ${hop + 1} → ${loc}`);
       if (!loc) break;
       currentUrl = loc;
       continue;
