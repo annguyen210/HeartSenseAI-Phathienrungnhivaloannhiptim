@@ -482,6 +482,30 @@ async function sendGmailEmail({ to, subject, html }) {
   return { sent: true, provider: "gmail", id: info.messageId || null };
 }
 
+// ─── SendGrid HTTP API — free 100/day, không cần activation, hoạt động ngay ───
+async function sendSendgridEmail({ to, subject, html }) {
+  const apiKey = process.env.SENDGRID_API_KEY;
+  const senderEmail = process.env.SENDGRID_SENDER_EMAIL || GMAIL_USER;
+  if (!apiKey) return { sent: false, provider: "sendgrid", reason: "SENDGRID_API_KEY chưa set" };
+  if (!senderEmail) return { sent: false, provider: "sendgrid", reason: "SENDGRID_SENDER_EMAIL chưa set" };
+  const payload = JSON.stringify({
+    personalizations: [{ to: [{ email: to }] }],
+    from: { email: senderEmail, name: "HEARTSENSE" },
+    subject,
+    content: [{ type: "text/html", value: html }],
+  });
+  await requestJson("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(payload),
+    },
+    body: payload,
+  });
+  return { sent: true, provider: "sendgrid" };
+}
+
 // ─── Mailjet HTTP API — không dùng SMTP, không bị Render chặn, free 200/day ───
 async function sendMailjetEmail({ to, subject, html }) {
   const apiKey = process.env.MAILJET_API_KEY;
@@ -543,7 +567,20 @@ async function sendBrevoEmail({ to, subject, html }) {
 async function sendEmail({ to, subject, html }) {
   if (!to) return { sent: false, reason: "missing_recipient" };
 
-  // 1. Mailjet — HTTP API, hoạt động ngay, free 200/day, không cần activation
+  // 1. SendGrid — HTTP API, free 100/day, hoạt động ngay sau khi verify sender email
+  if (process.env.SENDGRID_API_KEY) {
+    try {
+      const result = await sendSendgridEmail({ to, subject, html });
+      if (result.sent) { console.log(`[Email] SendGrid → ${to} ✓`); return result; }
+      console.error(`[Email] SendGrid thất bại: ${result.reason}`);
+      return { sent: false, reason: `SendGrid: ${result.reason}` };
+    } catch (e) {
+      console.error(`[Email] SendGrid lỗi: ${e.message}`);
+      return { sent: false, reason: `SendGrid lỗi: ${e.message}` };
+    }
+  }
+
+  // 2. Mailjet — HTTP API, free 200/day
   if (process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY) {
     try {
       const result = await sendMailjetEmail({ to, subject, html });
@@ -556,7 +593,7 @@ async function sendEmail({ to, subject, html }) {
     }
   }
 
-  // 2. Brevo — backup (cần activation từ Brevo team)
+  // 3. Brevo — backup (cần activation từ Brevo team)
   if (process.env.BREVO_API_KEY) {
     try {
       const result = await sendBrevoEmail({ to, subject, html });
