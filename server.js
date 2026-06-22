@@ -482,7 +482,39 @@ async function sendGmailEmail({ to, subject, html }) {
   return { sent: true, provider: "gmail", id: info.messageId || null };
 }
 
-// ─── Brevo (Sendinblue) HTTP API — không dùng SMTP, không bị Render chặn ──────
+// ─── Mailjet HTTP API — không dùng SMTP, không bị Render chặn, free 200/day ───
+async function sendMailjetEmail({ to, subject, html }) {
+  const apiKey = process.env.MAILJET_API_KEY;
+  const secretKey = process.env.MAILJET_SECRET_KEY;
+  const senderEmail = process.env.MAILJET_SENDER_EMAIL || GMAIL_USER;
+  if (!apiKey || !secretKey) return { sent: false, provider: "mailjet", reason: "MAILJET_API_KEY / MAILJET_SECRET_KEY chưa set" };
+  if (!senderEmail) return { sent: false, provider: "mailjet", reason: "MAILJET_SENDER_EMAIL chưa set" };
+  const payload = JSON.stringify({
+    Messages: [{
+      From: { Email: senderEmail, Name: "HEARTSENSE" },
+      To: [{ Email: to }],
+      Subject: subject,
+      HTMLPart: html,
+    }],
+  });
+  const auth = Buffer.from(`${apiKey}:${secretKey}`).toString("base64");
+  const result = await requestJson("https://api.mailjet.com/v3.1/send", {
+    method: "POST",
+    headers: {
+      "Authorization": `Basic ${auth}`,
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(payload),
+    },
+    body: payload,
+  });
+  const msg = result?.Messages?.[0];
+  if (msg?.Status !== "success") {
+    throw new Error(msg?.Errors?.[0]?.ErrorMessage || "Mailjet unknown error");
+  }
+  return { sent: true, provider: "mailjet", id: msg?.To?.[0]?.MessageID || null };
+}
+
+// ─── Brevo HTTP API (backup nếu Mailjet không dùng) ───────────────────────────
 async function sendBrevoEmail({ to, subject, html }) {
   const apiKey = process.env.BREVO_API_KEY;
   const senderEmail = process.env.BREVO_SENDER_EMAIL || GMAIL_USER;
@@ -511,44 +543,50 @@ async function sendBrevoEmail({ to, subject, html }) {
 async function sendEmail({ to, subject, html }) {
   if (!to) return { sent: false, reason: "missing_recipient" };
 
-  // 1. Brevo — HTTP API, Render không chặn, free 300 email/day, không cần domain
+  // 1. Mailjet — HTTP API, hoạt động ngay, free 200/day, không cần activation
+  if (process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY) {
+    try {
+      const result = await sendMailjetEmail({ to, subject, html });
+      if (result.sent) { console.log(`[Email] Mailjet → ${to} ✓`); return result; }
+      console.error(`[Email] Mailjet thất bại: ${result.reason}`);
+      return { sent: false, reason: `Mailjet: ${result.reason}` };
+    } catch (e) {
+      console.error(`[Email] Mailjet lỗi: ${e.message}`);
+      return { sent: false, reason: `Mailjet lỗi: ${e.message}` };
+    }
+  }
+
+  // 2. Brevo — backup (cần activation từ Brevo team)
   if (process.env.BREVO_API_KEY) {
     try {
       const result = await sendBrevoEmail({ to, subject, html });
       if (result.sent) { console.log(`[Email] Brevo → ${to} ✓`); return result; }
-      // Brevo configured nhưng trả về lỗi không phải exception
       console.error(`[Email] Brevo thất bại: ${result.reason}`);
       return { sent: false, reason: `Brevo: ${result.reason}` };
     } catch (e) {
-      // Log đầy đủ để thấy trong Render Logs
-      console.error(`[Email] Brevo exception: ${e.message}`);
+      console.error(`[Email] Brevo lỗi: ${e.message}`);
       return { sent: false, reason: `Brevo lỗi: ${e.message}` };
     }
   }
 
-  // 2. Gmail SMTP (thường bị Render chặn port — chỉ dùng khi Brevo chưa cấu hình)
+  // 3. Gmail SMTP (Render free tier chặn port — thường không dùng được)
   if (GMAIL_USER && GMAIL_APP_PASSWORD && _gmailReady) {
     try {
       const result = await sendGmailEmail({ to, subject, html });
       if (result.sent) { console.log(`[Email] Gmail → ${to} ✓`); return result; }
-      console.error(`[Email] Gmail thất bại: ${result.reason}`);
       return { sent: false, reason: `Gmail: ${result.reason}` };
     } catch (e) {
-      console.error(`[Email] Gmail exception: ${e.message}`);
-      _gmailTransporter = null;
-      _gmailReady = false;
+      _gmailTransporter = null; _gmailReady = false;
       return { sent: false, reason: `Gmail lỗi: ${e.message}` };
     }
   }
 
-  // 3. Resend — last resort, chỉ gửi được đến email chủ tài khoản với onboarding@resend.dev
+  // 4. Resend — chỉ gửi được đến email chủ tài khoản Resend
   if (process.env.RESEND_API_KEY) {
-    const result = await sendResendEmailWithRetry({ to, subject, html });
-    if (!result.sent) console.warn(`[Email] Resend thất bại: ${result.reason}`);
-    return result;
+    return await sendResendEmailWithRetry({ to, subject, html });
   }
 
-  return { sent: false, reason: "Chưa cấu hình email — cần thêm BREVO_API_KEY trong Render Dashboard" };
+  return { sent: false, reason: "Chưa cấu hình email — cần MAILJET_API_KEY + MAILJET_SECRET_KEY trong Render Dashboard" };
 }
 
 function buildReportEmailHtml(user, latest, status, dashboard, personalMessage = "", aiComment = "") {
@@ -3898,27 +3936,26 @@ function startAutoReportScheduler() {
 
 // ─── Email status endpoint — diagnostic không lộ thông tin nhạy cảm ──────────
 function handleEmailStatus(res) {
+  const mailjetReady = !!(process.env.MAILJET_API_KEY && process.env.MAILJET_SECRET_KEY);
   const brevoReady = !!process.env.BREVO_API_KEY;
   sendJson(res, 200, {
+    mailjet: {
+      configured: mailjetReady,
+      senderEmail: process.env.MAILJET_SENDER_EMAIL || GMAIL_USER || null,
+      note: mailjetReady ? "✅ Mailjet sẵn sàng — gửi được đến bất kỳ email nào" : "❌ Chưa set MAILJET_API_KEY + MAILJET_SECRET_KEY",
+    },
     brevo: {
       configured: brevoReady,
-      senderEmail: process.env.BREVO_SENDER_EMAIL || GMAIL_USER || null,
-      note: brevoReady ? "✅ Brevo sẵn sàng — gửi được đến bất kỳ email nào" : "❌ Chưa set BREVO_API_KEY",
+      note: brevoReady ? "⚠️ Brevo configured nhưng cần activation (liên hệ contact@brevo.com)" : "❌ Chưa set BREVO_API_KEY",
     },
     gmail: {
-      configured: !!(GMAIL_USER && GMAIL_APP_PASSWORD),
-      user: GMAIL_USER || null,
       ready: _gmailReady,
-      error: _gmailLastError || null,
-      note: "Render free tier chặn port SMTP — Gmail SMTP thường không dùng được trên Render",
+      error: _gmailLastError || "Render free tier chặn port SMTP",
     },
-    resend: {
-      configured: !!process.env.RESEND_API_KEY,
-      note: "onboarding@resend.dev chỉ gửi được tới email chủ tài khoản Resend",
-    },
-    recommendation: brevoReady
-      ? "✅ Brevo đã cấu hình — email sẽ gửi được"
-      : "❌ Cần set BREVO_API_KEY trong Render Dashboard (đăng ký miễn phí tại brevo.com)",
+    activeProvider: mailjetReady ? "mailjet" : brevoReady ? "brevo" : _gmailReady ? "gmail" : "resend",
+    recommendation: mailjetReady
+      ? "✅ Mailjet hoạt động — email sẽ gửi được ngay"
+      : "❌ Cần set MAILJET_API_KEY + MAILJET_SECRET_KEY + MAILJET_SENDER_EMAIL trong Render Dashboard",
   });
 }
 
