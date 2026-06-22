@@ -482,6 +482,28 @@ async function sendGmailEmail({ to, subject, html }) {
   return { sent: true, provider: "gmail", id: info.messageId || null };
 }
 
+// ─── SMTP2GO HTTP API — free 1000/month, không cần activation ────────────────
+async function sendSmtp2goEmail({ to, subject, html }) {
+  const apiKey = process.env.SMTP2GO_API_KEY;
+  const senderEmail = process.env.SMTP2GO_SENDER_EMAIL || GMAIL_USER;
+  if (!apiKey) return { sent: false, provider: "smtp2go", reason: "SMTP2GO_API_KEY chưa set" };
+  if (!senderEmail) return { sent: false, provider: "smtp2go", reason: "SMTP2GO_SENDER_EMAIL chưa set" };
+  const payload = JSON.stringify({
+    api_key: apiKey,
+    to: [to],
+    sender: senderEmail,
+    subject,
+    html_body: html,
+  });
+  const result = await requestJson("https://api.smtp2go.com/v3/email/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+    body: payload,
+  });
+  if (!result?.data?.succeeded) throw new Error(result?.data?.failures?.[0] || "smtp2go failed");
+  return { sent: true, provider: "smtp2go" };
+}
+
 // ─── SendGrid HTTP API — free 100/day, không cần activation, hoạt động ngay ───
 async function sendSendgridEmail({ to, subject, html }) {
   const apiKey = process.env.SENDGRID_API_KEY;
@@ -567,7 +589,20 @@ async function sendBrevoEmail({ to, subject, html }) {
 async function sendEmail({ to, subject, html }) {
   if (!to) return { sent: false, reason: "missing_recipient" };
 
-  // 1. SendGrid — HTTP API, free 100/day, hoạt động ngay sau khi verify sender email
+  // 1. SMTP2GO — HTTP API, free 1000/month, không cần activation
+  if (process.env.SMTP2GO_API_KEY) {
+    try {
+      const result = await sendSmtp2goEmail({ to, subject, html });
+      if (result.sent) { console.log(`[Email] SMTP2GO → ${to} ✓`); return result; }
+      console.error(`[Email] SMTP2GO thất bại: ${result.reason}`);
+      return { sent: false, reason: `SMTP2GO: ${result.reason}` };
+    } catch (e) {
+      console.error(`[Email] SMTP2GO lỗi: ${e.message}`);
+      return { sent: false, reason: `SMTP2GO lỗi: ${e.message}` };
+    }
+  }
+
+  // 2. SendGrid — HTTP API, free 100/day, hoạt động ngay sau khi verify sender email
   if (process.env.SENDGRID_API_KEY) {
     try {
       const result = await sendSendgridEmail({ to, subject, html });
