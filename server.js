@@ -482,6 +482,42 @@ async function sendGmailEmail({ to, subject, html }) {
   return { sent: true, provider: "gmail", id: info.messageId || null };
 }
 
+// ─── Google Apps Script Email Relay — dùng Gmail sẵn có, không cần service mới ─
+function requestJsonFollowRedirect(urlString, options) {
+  return new Promise((resolve, reject) => {
+    function attempt(url, hops) {
+      const target = new URL(url);
+      const req = https.request(target, { method: hops === 0 ? (options.method || "GET") : "GET", headers: options.headers || {} }, (res) => {
+        if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 303) && res.headers.location && hops < 4) {
+          attempt(res.headers.location, hops + 1); return;
+        }
+        let buf = "";
+        res.on("data", c => buf += c);
+        res.on("end", () => { try { resolve(buf ? JSON.parse(buf) : {}); } catch { resolve({}); } });
+      });
+      req.setTimeout(30000, () => { req.destroy(); reject(new Error("timeout")); });
+      req.on("error", reject);
+      if (hops === 0 && options.body) req.write(options.body);
+      req.end();
+    }
+    attempt(urlString, 0);
+  });
+}
+
+async function sendGoogleAppsScriptEmail({ to, subject, html }) {
+  const url = process.env.APPS_SCRIPT_URL;
+  const secret = process.env.APPS_SCRIPT_SECRET || "heartsense2024";
+  if (!url) return { sent: false, provider: "apps_script", reason: "APPS_SCRIPT_URL chưa set" };
+  const payload = JSON.stringify({ secret, to, subject, html });
+  const result = await requestJsonFollowRedirect(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+    body: payload,
+  });
+  if (!result?.sent) throw new Error(result?.error || "Apps Script relay failed");
+  return { sent: true, provider: "apps_script" };
+}
+
 // ─── SMTP2GO HTTP API — free 1000/month, không cần activation ────────────────
 async function sendSmtp2goEmail({ to, subject, html }) {
   const apiKey = process.env.SMTP2GO_API_KEY;
@@ -589,7 +625,20 @@ async function sendBrevoEmail({ to, subject, html }) {
 async function sendEmail({ to, subject, html }) {
   if (!to) return { sent: false, reason: "missing_recipient" };
 
-  // 1. SMTP2GO — HTTP API, free 1000/month, không cần activation
+  // 1. Google Apps Script relay — dùng Gmail sẵn có, không cần đăng ký service mới
+  if (process.env.APPS_SCRIPT_URL) {
+    try {
+      const result = await sendGoogleAppsScriptEmail({ to, subject, html });
+      if (result.sent) { console.log(`[Email] AppsScript → ${to} ✓`); return result; }
+      console.error(`[Email] AppsScript thất bại: ${result.reason}`);
+      return { sent: false, reason: `AppsScript: ${result.reason}` };
+    } catch (e) {
+      console.error(`[Email] AppsScript lỗi: ${e.message}`);
+      return { sent: false, reason: `AppsScript lỗi: ${e.message}` };
+    }
+  }
+
+  // 2. SMTP2GO — HTTP API, free 1000/month, không cần activation
   if (process.env.SMTP2GO_API_KEY) {
     try {
       const result = await sendSmtp2goEmail({ to, subject, html });
