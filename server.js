@@ -482,31 +482,69 @@ async function sendGmailEmail({ to, subject, html }) {
   return { sent: true, provider: "gmail", id: info.messageId || null };
 }
 
-// ─── Hàm gửi email thống nhất: ưu tiên Gmail (gửi được mọi email), fallback Resend ──
+// ─── Brevo (Sendinblue) HTTP API — không dùng SMTP, không bị Render chặn ──────
+async function sendBrevoEmail({ to, subject, html }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || GMAIL_USER;
+  if (!apiKey) return { sent: false, provider: "brevo", reason: "BREVO_API_KEY chưa set" };
+  if (!senderEmail) return { sent: false, provider: "brevo", reason: "BREVO_SENDER_EMAIL chưa set" };
+  const payload = JSON.stringify({
+    sender: { name: "HEARTSENSE", email: senderEmail },
+    to: [{ email: to }],
+    subject,
+    htmlContent: html,
+  });
+  const result = await requestJson("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "accept": "application/json",
+      "api-key": apiKey,
+      "content-type": "application/json",
+      "Content-Length": Buffer.byteLength(payload),
+    },
+    body: payload,
+  });
+  return { sent: true, provider: "brevo", id: result.messageId || null };
+}
+
+// ─── Hàm gửi email thống nhất ─────────────────────────────────────────────────
+// Thứ tự ưu tiên: Brevo HTTP API → Gmail SMTP → Resend
+// (Render free tier chặn port SMTP 587/465 nên Gmail SMTP luôn fail trên production)
 async function sendEmail({ to, subject, html }) {
   if (!to) return { sent: false, reason: "missing_recipient" };
-  // Gmail ưu tiên — không giới hạn email đích
-  if (GMAIL_USER && GMAIL_APP_PASSWORD) {
+
+  // 1. Brevo — HTTP API, Render không chặn, free 300 email/day, không cần domain
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const result = await sendBrevoEmail({ to, subject, html });
+      if (result.sent) { console.log(`[Email] Brevo → ${to} ✓`); return result; }
+      console.warn("[Email] Brevo không gửi được:", result.reason);
+    } catch (e) {
+      console.warn("[Email] Brevo lỗi:", e.message);
+    }
+  }
+
+  // 2. Gmail SMTP — chỉ hoạt động nếu Render không chặn port (thường bị chặn trên free tier)
+  if (GMAIL_USER && GMAIL_APP_PASSWORD && _gmailReady) {
     try {
       const result = await sendGmailEmail({ to, subject, html });
-      if (result.sent) {
-        console.log(`[Email] Gmail → ${to} ✓`);
-        return result;
-      }
+      if (result.sent) { console.log(`[Email] Gmail → ${to} ✓`); return result; }
       console.warn("[Email] Gmail không gửi được:", result.reason);
     } catch (e) {
       console.warn("[Email] Gmail lỗi:", e.message);
-      _gmailTransporter = null; // reset để lần sau thử lại
+      _gmailTransporter = null;
+      _gmailReady = false;
     }
   }
-  // Fallback Resend (lưu ý: onboarding@resend.dev chỉ gửi được đến email chủ tài khoản Resend)
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[Email] Không có Gmail lẫn Resend — cần set GMAIL_USER + GMAIL_APP_PASSWORD trên Render Dashboard");
-    return { sent: false, reason: "Chưa cấu hình email (cần GMAIL_USER + GMAIL_APP_PASSWORD trên Render Dashboard)" };
+
+  // 3. Resend — chỉ gửi được đến email chủ tài khoản khi dùng onboarding@resend.dev
+  if (process.env.RESEND_API_KEY) {
+    const result = await sendResendEmailWithRetry({ to, subject, html });
+    if (!result.sent) console.warn(`[Email] Resend thất bại: ${result.reason}`);
+    return result;
   }
-  const result = await sendResendEmailWithRetry({ to, subject, html });
-  if (!result.sent) console.warn(`[Email] Resend thất bại (${result.reason}) — có thể Resend chỉ gửi được tới email chủ tài khoản Resend khi dùng domain onboarding@resend.dev`);
-  return result;
+
+  return { sent: false, reason: "Chưa cấu hình provider email nào (cần BREVO_API_KEY trong Render Dashboard)" };
 }
 
 function buildReportEmailHtml(user, latest, status, dashboard, personalMessage = "", aiComment = "") {
@@ -3856,22 +3894,27 @@ function startAutoReportScheduler() {
 
 // ─── Email status endpoint — diagnostic không lộ thông tin nhạy cảm ──────────
 function handleEmailStatus(res) {
+  const brevoReady = !!process.env.BREVO_API_KEY;
   sendJson(res, 200, {
+    brevo: {
+      configured: brevoReady,
+      senderEmail: process.env.BREVO_SENDER_EMAIL || GMAIL_USER || null,
+      note: brevoReady ? "✅ Brevo sẵn sàng — gửi được đến bất kỳ email nào" : "❌ Chưa set BREVO_API_KEY",
+    },
     gmail: {
       configured: !!(GMAIL_USER && GMAIL_APP_PASSWORD),
       user: GMAIL_USER || null,
-      passwordLength: GMAIL_APP_PASSWORD ? GMAIL_APP_PASSWORD.length : 0,
       ready: _gmailReady,
       error: _gmailLastError || null,
+      note: "Render free tier chặn port SMTP — Gmail SMTP thường không dùng được trên Render",
     },
     resend: {
       configured: !!process.env.RESEND_API_KEY,
-      from: process.env.EMAIL_FROM || null,
-      note: "onboarding@resend.dev chỉ gửi được tới email chủ tài khoản Resend — cần verified domain để gửi tuỳ ý",
+      note: "onboarding@resend.dev chỉ gửi được tới email chủ tài khoản Resend",
     },
-    recommendation: _gmailReady
-      ? "✅ Gmail đã sẵn sàng — email sẽ gửi được đến bất kỳ địa chỉ nào"
-      : "❌ Gmail chưa sẵn sàng — kiểm tra GMAIL_USER và GMAIL_APP_PASSWORD trong Render Dashboard",
+    recommendation: brevoReady
+      ? "✅ Brevo đã cấu hình — email sẽ gửi được"
+      : "❌ Cần set BREVO_API_KEY trong Render Dashboard (đăng ký miễn phí tại brevo.com)",
   });
 }
 
