@@ -5,6 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const nodemailer = require("nodemailer");
+const nodeFetch = require("node-fetch");
 
 const PORT = process.env.PORT || 8010;
 const ROOT = __dirname;
@@ -483,39 +484,36 @@ async function sendGmailEmail({ to, subject, html }) {
 }
 
 // ─── Google Apps Script Email Relay — dùng Gmail sẵn có, không cần service mới ─
-function requestJsonFollowRedirect(urlString, options) {
-  return new Promise((resolve, reject) => {
-    function attempt(url, hops) {
-      const target = new URL(url);
-      const req = https.request(target, { method: options.method || "GET", headers: options.headers || {} }, (res) => {
-        if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 303) && res.headers.location && hops < 4) {
-          attempt(res.headers.location, hops + 1); return;
-        }
-        let buf = "";
-        res.on("data", c => buf += c);
-        res.on("end", () => { try { resolve(buf ? JSON.parse(buf) : {}); } catch { resolve({}); } });
-      });
-      req.setTimeout(30000, () => { req.destroy(); reject(new Error("timeout")); });
-      req.on("error", reject);
-      if (options.body) req.write(options.body); // gửi body trên mọi hop kể cả sau redirect
-      req.end();
-    }
-    attempt(urlString, 0);
-  });
-}
-
 async function sendGoogleAppsScriptEmail({ to, subject, html }) {
   const url = process.env.APPS_SCRIPT_URL;
   const secret = process.env.APPS_SCRIPT_SECRET || "heartsense2024";
   if (!url) return { sent: false, provider: "apps_script", reason: "APPS_SCRIPT_URL chưa set" };
-  const payload = JSON.stringify({ secret, to, subject, html });
-  const result = await requestJsonFollowRedirect(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
-    body: payload,
-  });
-  if (!result?.sent) throw new Error(result?.error || "Apps Script relay failed");
-  return { sent: true, provider: "apps_script" };
+  const body = JSON.stringify({ secret, to, subject, html });
+  // node-fetch với redirect:"manual" để tự handle redirect — giữ POST + body qua mọi hop
+  let currentUrl = url;
+  for (let hop = 0; hop < 5; hop++) {
+    const res = await nodeFetch(currentUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      redirect: "manual",
+      timeout: 30000,
+    });
+    if (res.status === 301 || res.status === 302 || res.status === 303) {
+      const loc = res.headers.get("location");
+      console.log(`[AppsScript] redirect ${hop + 1} → ${loc}`);
+      if (!loc) break;
+      currentUrl = loc;
+      continue;
+    }
+    const text = await res.text();
+    console.log(`[AppsScript] status=${res.status} body=${text.substring(0, 200)}`);
+    let result;
+    try { result = JSON.parse(text); } catch { result = {}; }
+    if (!result?.sent) throw new Error(result?.error || `HTTP ${res.status}: ${text.substring(0, 120)}`);
+    return { sent: true, provider: "apps_script" };
+  }
+  throw new Error("Quá nhiều redirect từ Apps Script");
 }
 
 // ─── SMTP2GO HTTP API — free 1000/month, không cần activation ────────────────
