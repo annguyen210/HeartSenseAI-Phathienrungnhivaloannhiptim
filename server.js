@@ -508,8 +508,6 @@ async function sendBrevoEmail({ to, subject, html }) {
 }
 
 // ─── Hàm gửi email thống nhất ─────────────────────────────────────────────────
-// Thứ tự ưu tiên: Brevo HTTP API → Gmail SMTP → Resend
-// (Render free tier chặn port SMTP 587/465 nên Gmail SMTP luôn fail trên production)
 async function sendEmail({ to, subject, html }) {
   if (!to) return { sent: false, reason: "missing_recipient" };
 
@@ -518,33 +516,39 @@ async function sendEmail({ to, subject, html }) {
     try {
       const result = await sendBrevoEmail({ to, subject, html });
       if (result.sent) { console.log(`[Email] Brevo → ${to} ✓`); return result; }
-      console.warn("[Email] Brevo không gửi được:", result.reason);
+      // Brevo configured nhưng trả về lỗi không phải exception
+      console.error(`[Email] Brevo thất bại: ${result.reason}`);
+      return { sent: false, reason: `Brevo: ${result.reason}` };
     } catch (e) {
-      console.warn("[Email] Brevo lỗi:", e.message);
+      // Log đầy đủ để thấy trong Render Logs
+      console.error(`[Email] Brevo exception: ${e.message}`);
+      return { sent: false, reason: `Brevo lỗi: ${e.message}` };
     }
   }
 
-  // 2. Gmail SMTP — chỉ hoạt động nếu Render không chặn port (thường bị chặn trên free tier)
+  // 2. Gmail SMTP (thường bị Render chặn port — chỉ dùng khi Brevo chưa cấu hình)
   if (GMAIL_USER && GMAIL_APP_PASSWORD && _gmailReady) {
     try {
       const result = await sendGmailEmail({ to, subject, html });
       if (result.sent) { console.log(`[Email] Gmail → ${to} ✓`); return result; }
-      console.warn("[Email] Gmail không gửi được:", result.reason);
+      console.error(`[Email] Gmail thất bại: ${result.reason}`);
+      return { sent: false, reason: `Gmail: ${result.reason}` };
     } catch (e) {
-      console.warn("[Email] Gmail lỗi:", e.message);
+      console.error(`[Email] Gmail exception: ${e.message}`);
       _gmailTransporter = null;
       _gmailReady = false;
+      return { sent: false, reason: `Gmail lỗi: ${e.message}` };
     }
   }
 
-  // 3. Resend — chỉ gửi được đến email chủ tài khoản khi dùng onboarding@resend.dev
+  // 3. Resend — last resort, chỉ gửi được đến email chủ tài khoản với onboarding@resend.dev
   if (process.env.RESEND_API_KEY) {
     const result = await sendResendEmailWithRetry({ to, subject, html });
     if (!result.sent) console.warn(`[Email] Resend thất bại: ${result.reason}`);
     return result;
   }
 
-  return { sent: false, reason: "Chưa cấu hình provider email nào (cần BREVO_API_KEY trong Render Dashboard)" };
+  return { sent: false, reason: "Chưa cấu hình email — cần thêm BREVO_API_KEY trong Render Dashboard" };
 }
 
 function buildReportEmailHtml(user, latest, status, dashboard, personalMessage = "", aiComment = "") {
