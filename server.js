@@ -487,7 +487,7 @@ function requestJsonFollowRedirect(urlString, options) {
   return new Promise((resolve, reject) => {
     function attempt(url, hops) {
       const target = new URL(url);
-      const req = https.request(target, { method: hops === 0 ? (options.method || "GET") : "GET", headers: options.headers || {} }, (res) => {
+      const req = https.request(target, { method: options.method || "GET", headers: options.headers || {} }, (res) => {
         if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 303) && res.headers.location && hops < 4) {
           attempt(res.headers.location, hops + 1); return;
         }
@@ -497,7 +497,7 @@ function requestJsonFollowRedirect(urlString, options) {
       });
       req.setTimeout(30000, () => { req.destroy(); reject(new Error("timeout")); });
       req.on("error", reject);
-      if (hops === 0 && options.body) req.write(options.body);
+      if (options.body) req.write(options.body); // gửi body trên mọi hop kể cả sau redirect
       req.end();
     }
     attempt(urlString, 0);
