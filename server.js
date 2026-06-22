@@ -929,6 +929,128 @@ Giọng: ấm áp, bình tĩnh, không gây hoảng loạn nhưng đủ rõ ràn
   }
 }
 
+// Phân tích AI xu hướng 7 ngày — dùng riêng cho báo cáo tổng hợp hàng ngày
+async function generateDailyAiAnalysis(user, latest, weekly) {
+  if (!GEMINI_API_KEY) return null;
+  const r = latest?.result;
+  const conditions = (user.conditions || []).join(", ") || "không có";
+  const gender = user.gender === "male" ? "Nam" : user.gender === "female" ? "Nữ" : "Không rõ";
+  const w = weekly || {};
+  const prompt = `Bạn là Bác sĩ Tim mạch AI HEARTSENSE. Viết BÁO CÁO PHÂN TÍCH 7 NGÀY gửi cho NGƯỜI THÂN của bệnh nhân — người không có chuyên môn y tế.
+
+HỒ SƠ BỆNH NHÂN:
+- Tên: ${user.fullName || "Bệnh nhân"} | Tuổi: ${user.age} | Giới: ${gender}
+- Bệnh nền: ${conditions}
+
+SỐ LIỆU 7 NGÀY QUA:
+- Tổng lần đo: ${w.totalMeasurements || 0} lần
+- Nhịp tim trung bình: ${w.averageBpm || "--"} BPM
+- Số cảnh báo AFib: ${w.afibAlerts || 0} lần
+- Tóm tắt xu hướng: ${w.summary || "không có dữ liệu bổ sung"}
+
+KẾT QUẢ ĐO GẦN NHẤT:
+- Nhịp tim: ${r?.bpm || "--"} BPM | Tình trạng: ${r?.classification === "afib" ? "RUNG NHĨ" : r?.classification === "elevated" ? "Cao" : "Bình thường"}
+- Nguy cơ đột quỵ: ${r?.strokeRiskScore ?? "--"}% | HRV (SDNN): ${r?.sdnn ?? "--"}ms
+- Nguy cơ huyết khối: ${r?.clotRisk?.score ?? "--"}/100
+
+Viết báo cáo theo đúng 3 phần, mỗi phần bắt đầu bằng tiêu đề IN HOA:
+
+ĐÁNH GIÁ SỨC KHỎE TUẦN QUA
+(Đánh giá tổng thể xu hướng 7 ngày, chỉ số nào cải thiện, chỉ số nào đáng lo, so sánh với ngưỡng bình thường)
+
+ĐIỂM CẦN LƯU Ý
+(Liệt kê 2-4 chỉ số hoặc sự kiện đáng chú ý nhất trong tuần, giải thích ý nghĩa bằng ngôn ngữ đơn giản)
+
+KHUYẾN NGHỊ CHO TUẦN TỚI
+(3-4 hành động cụ thể người thân nên nhắc hoặc theo dõi trong 7 ngày tới. Nếu có cảnh báo AFib — nhấn mạnh cần gặp bác sĩ.)
+
+Giọng văn: chuyên nghiệp nhưng dễ hiểu, ấm áp, không gây hoảng loạn. Tiếng Việt. Không dùng markdown ký tự đặc biệt.`;
+  try {
+    const payload = JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 1024, topP: 0.9, thinkingConfig: { thinkingBudget: 0 } },
+      safetySettings: [{ category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }],
+    });
+    const res = await requestJson(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+      body: payload,
+    });
+    if (res?.error) { console.warn("[DailyAI]", res.error.message); return null; }
+    return res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+  } catch (e) {
+    console.warn("[DailyAI]", e.message); return null;
+  }
+}
+
+// Template riêng cho báo cáo tổng hợp hàng ngày — khác hoàn toàn với báo cáo tức thì
+function buildDailyReportEmailHtml(user, latest, dashboard, aiAnalysis) {
+  const r = latest?.result;
+  const w = dashboard?.weeklyReport || {};
+  const isAfib = r?.classification === "afib";
+  const isElevated = r?.classification === "elevated";
+  const statusColor = isAfib ? "#cc2244" : isElevated ? "#d97706" : "#059669";
+  const statusLabel = isAfib ? "⚠️ CÓ CẢNH BÁO AFIB TRONG TUẦN" : isElevated ? "⚡ CHỈ SỐ THEO DÕI" : "✅ TUẦN ỔN ĐỊNH";
+  const riskColor = (r?.strokeRiskScore || 0) >= 70 ? "#cc2244" : (r?.strokeRiskScore || 0) >= 40 ? "#d97706" : "#059669";
+  const afibColor = (w.afibAlerts || 0) > 0 ? "#cc2244" : "#059669";
+  const safeAi = (aiAnalysis || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const now = new Date().toLocaleString("vi-VN");
+  return `<div style="font-family:Arial,sans-serif;padding:24px;max-width:540px;background:#fff">
+    <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;padding:16px 20px;border-radius:12px;margin-bottom:20px">
+      <div style="font-size:11px;letter-spacing:1px;opacity:0.85;margin-bottom:4px">BÁO CÁO TỰ ĐỘNG HÀNG NGÀY</div>
+      <div style="font-size:17px;font-weight:bold">HEARTSENSE – Tổng hợp sức khỏe</div>
+      <div style="font-size:13px;opacity:0.9;margin-top:4px">👤 ${escHtml(user.fullName)} (${user.age} tuổi) &nbsp;·&nbsp; ${now}</div>
+    </div>
+    <div style="background:${statusColor}18;border:1.5px solid ${statusColor};border-radius:10px;padding:12px 16px;text-align:center;font-weight:700;font-size:15px;color:${statusColor};margin-bottom:20px">
+      ${statusLabel}
+    </div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:700;color:#4f46e5;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">📊 Tổng kết 7 ngày qua</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div style="background:#f5f3ff;padding:12px;border-radius:8px;text-align:center">
+          <div style="font-size:24px;font-weight:bold;color:#4f46e5">${w.totalMeasurements || 0}</div>
+          <div style="font-size:11px;color:#666">Lần đo</div>
+        </div>
+        <div style="background:#f5f3ff;padding:12px;border-radius:8px;text-align:center">
+          <div style="font-size:24px;font-weight:bold;color:#10233f">${w.averageBpm || "--"}</div>
+          <div style="font-size:11px;color:#666">TB BPM</div>
+        </div>
+        <div style="background:#f5f3ff;padding:12px;border-radius:8px;text-align:center">
+          <div style="font-size:24px;font-weight:bold;color:${afibColor}">${w.afibAlerts || 0}</div>
+          <div style="font-size:11px;color:#666">Cảnh báo AFib</div>
+        </div>
+      </div>
+    </div>
+    ${r ? `
+    <div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:700;color:#10233f;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">💓 Lần đo gần nhất</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="background:#f0f9ff;padding:10px;border-radius:8px;text-align:center">
+          <div style="font-size:22px;font-weight:bold;color:#10233f">${r.bpm} <span style="font-size:13px">BPM</span></div>
+          <div style="font-size:11px;color:#666">Nhịp tim</div>
+        </div>
+        <div style="background:#f0f9ff;padding:10px;border-radius:8px;text-align:center">
+          <div style="font-size:22px;font-weight:bold;color:${riskColor}">${r.strokeRiskScore}%</div>
+          <div style="font-size:11px;color:#666">Nguy cơ đột quỵ</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#888;margin-top:6px;text-align:right">⏱ ${new Date(latest.createdAt).toLocaleString("vi-VN")}</div>
+    </div>` : `<p style="color:#888;margin-bottom:16px;font-size:13px">Chưa có lần đo nào gần đây.</p>`}
+    ${safeAi ? `
+    <div style="background:#f5f3ff;border-left:4px solid #4f46e5;border-radius:0 10px 10px 0;padding:16px 18px;margin-bottom:16px">
+      <div style="font-size:11px;color:#4f46e5;font-weight:700;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">🧠 Phân tích AI – Xu hướng sức khỏe tuần</div>
+      <div style="font-size:13px;color:#1e293b;line-height:1.85;white-space:pre-wrap">${safeAi}</div>
+    </div>` : `
+    <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#64748b;text-align:center">
+      AI phân tích không khả dụng lần này — sẽ có ở báo cáo kế tiếp.
+    </div>`}
+    <div style="background:#fff7ed;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:11px;color:#9a3412">
+      ⚠️ Thông tin từ HEARTSENSE mang tính hỗ trợ theo dõi, không thay thế ý kiến bác sĩ.
+    </div>
+    <p style="color:#999;font-size:11px;margin:0;text-align:center;border-top:1px solid #e2e8f0;padding-top:10px">HEARTSENSE – Mắt thần cho con xa &nbsp;·&nbsp; Báo cáo tự động ${now}</p>
+  </div>`;
+}
+
 async function sendGuardianMeasurementNotification(user, record, dashboard) {
   const guardian = user.guardian || {};
   if (!guardian.guardianEmail || !guardian.reportSchedule?.notifyOnMeasurement) return;
@@ -3981,13 +4103,12 @@ async function runSchedulerCheck() {
     try {
       const dashboard = await buildDashboard(user.id);
       const latest = dashboard.latestMeasurement;
-      const status = latest?.result?.classification === "afib" ? "⚠️ CÓ CẢNH BÁO"
-        : latest?.result?.classification === "elevated" ? "Theo dõi" : "Bình thường";
-      const aiComment = await generateGuardianAiComment(user, latest?.result, vnNow.toLocaleString("vi-VN")).catch(() => null);
+      // Dùng AI phân tích xu hướng 7 ngày — khác với aiComment tức thì sau mỗi lần đo
+      const aiAnalysis = await generateDailyAiAnalysis(user, latest, dashboard.weeklyReport).catch(() => null);
       emailResult = await sendEmail({
         to: user.guardian.guardianEmail,
-        subject: `HEARTSENSE – Báo cáo tự động: ${escHtml(user.fullName)} – ${vnNow.toLocaleDateString("vi-VN")}`,
-        html: buildReportEmailHtml(user, latest, status, dashboard, "", aiComment || ""),
+        subject: `HEARTSENSE – Báo cáo tổng hợp ${vnNow.toLocaleDateString("vi-VN")}: ${escHtml(user.fullName)}`,
+        html: buildDailyReportEmailHtml(user, latest, dashboard, aiAnalysis),
       });
       if (emailResult.sent) {
         appendLedgerEntry(user.id, "remote_parent.auto_sent", "Tu dong gui bao cao theo lich", { email: user.guardian.guardianEmail, scheduledTime: schedTime, catchUp: isMissed });
