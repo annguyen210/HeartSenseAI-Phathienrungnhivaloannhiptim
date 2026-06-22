@@ -777,51 +777,73 @@ function buildReportEmailHtml(user, latest, status, dashboard, personalMessage =
 function buildAiAnalysisEmailHtml(user, r, aiAnalysis, guardianName) {
   const isAfib = r?.classification === "afib";
   const isElevated = r?.classification === "elevated";
-  const bannerColor = isAfib ? "#cc2244" : isElevated ? "#d97706" : "#059669";
-  const bannerLabel = isAfib
-    ? "⚠️ BÁO CÁO SỨC KHỎE – PHÁT HIỆN BẤT THƯỜNG"
+  const accentColor = isAfib ? "#dc2626" : isElevated ? "#d97706" : "#0d9488";
+  const statusBadge = isAfib
+    ? `<span style="background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:700">⚠️ PHÁT HIỆN RUNG NHĨ (AFib)</span>`
     : isElevated
-    ? "⚡ BÁO CÁO SỨC KHỎE – CHỈ SỐ CẦN THEO DÕI"
-    : "✅ BÁO CÁO SỨC KHỎE – TÌNH TRẠNG ỔN ĐỊNH";
-  const riskColor = (r?.strokeRiskScore || 0) >= 60 ? "#cc2244" : (r?.strokeRiskScore || 0) >= 30 ? "#d97706" : "#059669";
-  const clotColor = (r?.clotRisk?.score || 0) >= 60 ? "#cc2244" : (r?.clotRisk?.score || 0) >= 30 ? "#d97706" : "#059669";
-  const bpm = r?.bpm || "--";
-  const sdnn = r?.sdnn ?? "--";
-  const strokeRisk = r?.strokeRiskScore ?? "--";
-  const clotScore = r?.clotRisk?.score ?? "--";
+    ? `<span style="background:#fffbeb;color:#d97706;border:1px solid #fcd34d;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:700">⚡ CHỈ SỐ CẦN THEO DÕI</span>`
+    : `<span style="background:#f0fdf4;color:#16a34a;border:1px solid #86efac;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:700">✅ TÌNH TRẠNG ỔN ĐỊNH</span>`;
+  const riskColor = (r?.strokeRiskScore || 0) >= 60 ? "#dc2626" : (r?.strokeRiskScore || 0) >= 30 ? "#d97706" : "#16a34a";
+  const clotColor = (r?.clotRisk?.score || 0) >= 60 ? "#dc2626" : (r?.clotRisk?.score || 0) >= 30 ? "#d97706" : "#16a34a";
   const now = new Date().toLocaleString("vi-VN");
-  const safeAnalysis = (aiAnalysis || "Không có phân tích.").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return `<div style="font-family:Arial,sans-serif;padding:24px;max-width:560px;background:#fff">
-    <div style="background:${bannerColor};color:#fff;padding:14px 18px;border-radius:10px;text-align:center;font-size:16px;font-weight:bold;margin-bottom:18px">${bannerLabel}</div>
-    <h3 style="color:#10233f;margin:0 0 4px">HEARTSENSE – Phân tích sức khỏe tim mạch AI</h3>
-    <p style="color:#555;margin:0 0 16px;font-size:13px">Kính gửi: <strong>${escHtml(guardianName || "Người thân")}</strong> &nbsp;·&nbsp; Bệnh nhân: <strong>${escHtml(user.fullName)}</strong> (${user.age} tuổi) &nbsp;·&nbsp; ${now}</p>
-    ${r && r.bpm ? `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
-      <div style="background:#f0f9ff;padding:12px;border-radius:8px;text-align:center">
-        <div style="font-size:28px;font-weight:bold;color:#10233f">${bpm}</div>
-        <div style="font-size:12px;color:#666">Nhịp tim (BPM)</div>
-      </div>
-      <div style="background:#f0f9ff;padding:12px;border-radius:8px;text-align:center">
-        <div style="font-size:28px;font-weight:bold;color:${riskColor}">${strokeRisk}%</div>
-        <div style="font-size:12px;color:#666">Nguy cơ đột quỵ</div>
-      </div>
-      <div style="background:#f8fafc;padding:12px;border-radius:8px;text-align:center">
-        <div style="font-size:22px;font-weight:bold;color:#10233f">${sdnn}${typeof sdnn === "number" ? "ms" : ""}</div>
-        <div style="font-size:12px;color:#666">HRV (SDNN)</div>
-      </div>
-      <div style="background:#f8fafc;padding:12px;border-radius:8px;text-align:center">
-        <div style="font-size:22px;font-weight:bold;color:${clotColor}">${clotScore}${typeof clotScore === "number" ? "/100" : ""}</div>
-        <div style="font-size:12px;color:#666">Nguy cơ huyết khối</div>
-      </div>
-    </div>` : `<p style="color:#888;margin-bottom:16px">Chưa có dữ liệu đo gần đây.</p>`}
-    <div style="background:#f8fafc;border-radius:10px;padding:18px;margin-bottom:18px;border-left:4px solid ${bannerColor}">
-      <div style="font-size:12px;color:#0f766e;font-weight:700;margin-bottom:12px;text-transform:uppercase;letter-spacing:0.5px">📋 Phân tích từ AI Bác sĩ Tim mạch HEARTSENSE</div>
-      <div style="font-size:14px;color:#1e293b;line-height:1.8;white-space:pre-wrap">${safeAnalysis}</div>
+  const hasAi = !!(aiAnalysis && aiAnalysis.length > 20);
+  const safeAnalysis = (aiAnalysis || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<div style="font-family:Arial,sans-serif;max-width:580px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+    <!-- Header gradient -->
+    <div style="background:linear-gradient(135deg,#0f766e,#0d9488,#14b8a6);padding:24px 28px;color:#fff">
+      <div style="font-size:11px;letter-spacing:2px;opacity:0.8;margin-bottom:6px">🧠 PHÂN TÍCH SỨC KHỎE TIM MẠCH AI</div>
+      <div style="font-size:20px;font-weight:800;margin-bottom:4px">HEARTSENSE</div>
+      <div style="font-size:13px;opacity:0.9">Kính gửi: <strong>${escHtml(guardianName || "Quý người thân")}</strong></div>
+      <div style="font-size:13px;opacity:0.85;margin-top:2px">Bệnh nhân: <strong>${escHtml(user.fullName)}</strong> — ${user.age} tuổi &nbsp;·&nbsp; ${now}</div>
     </div>
-    <div style="background:#fff7ed;border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;color:#9a3412">
-      ⚠️ Lưu ý: Đây là phân tích hỗ trợ từ AI, KHÔNG thay thế ý kiến bác sĩ. Nếu có triệu chứng bất thường, hãy liên hệ bác sĩ hoặc gọi 115.
+    <!-- Status badge -->
+    <div style="padding:16px 28px;border-bottom:1px solid #f0f9ff;text-align:center">
+      ${statusBadge}
     </div>
-    <p style="color:#999;font-size:11px;margin:0;text-align:center;border-top:1px solid #e2e8f0;padding-top:12px">HEARTSENSE – Ứng dụng theo dõi tim mạch AI &nbsp;·&nbsp; Báo cáo tự động ${now}</p>
+    ${r?.bpm ? `
+    <!-- Metrics -->
+    <div style="padding:20px 28px;border-bottom:1px solid #f1f5f9">
+      <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">📊 Chỉ số đo lần gần nhất</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;padding:12px 8px;border-radius:8px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:#10233f">${r.bpm}</div>
+          <div style="font-size:10px;color:#666;margin-top:2px">BPM</div>
+        </div>
+        <div style="background:#fef2f2;border:1px solid #fecaca;padding:12px 8px;border-radius:8px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:${riskColor}">${r.strokeRiskScore ?? "--"}%</div>
+          <div style="font-size:10px;color:#666;margin-top:2px">Đột quỵ</div>
+        </div>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;padding:12px 8px;border-radius:8px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:#1d4ed8">${r.sdnn ?? "--"}<span style="font-size:11px">ms</span></div>
+          <div style="font-size:10px;color:#666;margin-top:2px">HRV</div>
+        </div>
+        <div style="background:#fdf4ff;border:1px solid #e9d5ff;padding:12px 8px;border-radius:8px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:${clotColor}">${r.clotRisk?.score ?? "--"}</div>
+          <div style="font-size:10px;color:#666;margin-top:2px">Huyết khối</div>
+        </div>
+      </div>
+    </div>` : ""}
+    <!-- AI Analysis -->
+    <div style="padding:20px 28px;border-bottom:1px solid #f1f5f9">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <div style="background:#0d9488;color:#fff;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:0.5px">🤖 BS.CK II TIM MẠCH AI</div>
+        ${hasAi ? `<div style="font-size:11px;color:#0d9488">● Phân tích trực tiếp từ dữ liệu đo</div>` : `<div style="font-size:11px;color:#94a3b8">Đang cập nhật</div>`}
+      </div>
+      ${hasAi ? `
+      <div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;padding:16px">
+        <div style="font-size:13.5px;color:#134e4a;line-height:1.9;white-space:pre-wrap">${safeAnalysis}</div>
+      </div>` : `
+      <div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:16px;text-align:center;color:#94a3b8;font-size:13px">
+        Phân tích AI tạm thời không khả dụng.<br>Báo cáo sức khỏe cơ bản được gửi thay thế.
+      </div>`}
+    </div>
+    <!-- Disclaimer + Footer -->
+    <div style="padding:14px 28px;background:#fffbeb;border-top:1px solid #fde68a">
+      <p style="margin:0;font-size:11px;color:#92400e">⚠️ Phân tích từ AI HEARTSENSE mang tính hỗ trợ theo dõi, <strong>không thay thế chẩn đoán bác sĩ</strong>. Triệu chứng bất thường → gọi <strong>115</strong> ngay.</p>
+    </div>
+    <div style="padding:12px 28px;text-align:center;background:#f8fafc">
+      <p style="margin:0;font-size:11px;color:#94a3b8">HEARTSENSE – Ứng dụng theo dõi tim mạch AI &nbsp;·&nbsp; ${now}</p>
+    </div>
   </div>`;
 }
 
@@ -3301,7 +3323,11 @@ QUY TẮC:
         body: payload,
       });
       aiAnalysis = geminiRes?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
-      if (!aiAnalysis) console.warn("[AiFamilyReport] Gemini trả về trống, gửi báo cáo thường.");
+      if (aiAnalysis) {
+        console.log(`[AiFamilyReport] ✅ AI phân tích OK — ${aiAnalysis.length} ký tự`);
+      } else {
+        console.warn("[AiFamilyReport] ⚠️ Gemini trả về trống — gửi template AI không có nội dung.");
+      }
     } catch (geminiErr) {
       console.warn("[AiFamilyReport] Gemini lỗi, fallback báo cáo thường:", geminiErr.message);
     }
@@ -3310,16 +3336,9 @@ QUY TẮC:
   try {
     let emailHtml, emailSubject;
     const classLabel = r.classification === "afib" ? "⚠️ PHÁT HIỆN BẤT THƯỜNG" : r.classification === "elevated" ? "⚡ Cần theo dõi" : "✅ Bình thường";
-    if (aiAnalysis) {
-      emailHtml = buildAiAnalysisEmailHtml(user, r, aiAnalysis, guardian.guardianName);
-      emailSubject = `HEARTSENSE – Báo cáo AI: ${user.fullName} – ${classLabel} – ${new Date().toLocaleDateString("vi-VN")}`;
-    } else {
-      // Fallback: báo cáo thường không cần AI
-      const dashboard = await buildDashboard(user.id);
-      const status = r.classification === "afib" ? "⚠️ CÓ CẢNH BÁO" : r.classification === "elevated" ? "Theo dõi" : "Bình thường";
-      emailHtml = buildReportEmailHtml(user, latest, status, dashboard, "");
-      emailSubject = `HEARTSENSE – Báo cáo sức khoẻ: ${user.fullName} – ${classLabel} – ${new Date().toLocaleDateString("vi-VN")}`;
-    }
+    // Luôn dùng template AI — khi không có aiAnalysis thì hiện placeholder trong template
+    emailHtml = buildAiAnalysisEmailHtml(user, r, aiAnalysis, guardian.guardianName);
+    emailSubject = `HEARTSENSE – Phân tích AI Tim mạch: ${user.fullName} – ${classLabel} – ${new Date().toLocaleDateString("vi-VN")}`;
 
     const emailResult = await sendEmail({
       to: guardian.guardianEmail,
