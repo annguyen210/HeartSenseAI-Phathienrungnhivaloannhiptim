@@ -140,6 +140,22 @@ def normalize(sig):
     mu = np.mean(sig); sd = np.std(sig)
     return (sig - mu) / (sd + 1e-8)
 
+def chrom_from_features(features: np.ndarray, fs: float = FPS) -> np.ndarray:
+    """CHROM rPPG signal từ [T, 7] feature array (R, G, B, dR, dG, dB, brightness)."""
+    R = features[:, 0]; G = features[:, 1]; B = features[:, 2]
+    mR, mG, mB = np.mean(R), np.mean(G), np.mean(B)
+    if mR < 1e-6 or mG < 1e-6 or mB < 1e-6:
+        return None
+    Cr = R / mR - 1; Cg = G / mG - 1; Cb = B / mB - 1
+    X = 3*Cr - 2*Cg
+    Y = 1.5*Cr + Cg - 1.5*Cb
+    try:
+        Xf = bandpass(X, fs=fs); Yf = bandpass(Y, fs=fs)
+        alpha = np.std(Xf) / (np.std(Yf) + 1e-8)
+        return Xf - alpha * Yf
+    except Exception:
+        return None
+
 # ── Decode base64 face crops ───────────────────────────────────────────────────
 def decode_crops(b64: str, shape: list) -> np.ndarray:
     """Decode base64 Float32 blob → numpy [T, H, W, 3] float32."""
@@ -190,6 +206,22 @@ def infer(req: InferRequest):
     t0 = time.perf_counter()
     fps = req.fps or FPS
 
+    features_arr = np.array(req.features, dtype=np.float32)
+
+    # ── Classical CHROM baseline (always computed — used for cross-validation) ──
+    chrom_sig = chrom_from_features(features_arr, fs=fps)
+    chrom_bpm = bpm_from_signal(chrom_sig, fs=fps) if chrom_sig is not None else None
+
+    def _cross_validate(model_signal, model_bpm, model_name):
+        """Return model signal if BPM agrees with CHROM within 22 BPM, else fallback to CHROM."""
+        if chrom_bpm is None or model_bpm is None:
+            return model_signal, model_bpm, model_name
+        if abs(model_bpm - chrom_bpm) > 22:
+            print(f"[Inference] {model_name} BPM={model_bpm:.1f} vs CHROM={chrom_bpm:.1f} — lệch >22, dùng CHROM")
+            chrom_n = normalize(chrom_sig).tolist()
+            return chrom_n, chrom_bpm, f"{model_name}_chrom_fallback"
+        return model_signal, model_bpm, model_name
+
     # ── Face mode: use rppg_lite if crops provided and model available ──────────
     if req.mode == "face" and req.crops_b64 and req.crops_shape and _lite_loaded:
         try:
@@ -200,34 +232,40 @@ def infer(req: InferRequest):
             pred = _model_lite.predict(x, verbose=0)  # [1, T-1]
             signal = normalize(pred[0]).tolist()
             bpm = bpm_from_signal(np.array(signal), fs=fps)
+            signal, bpm, model_used = _cross_validate(signal, bpm, "rppg_lite")
             latency = (time.perf_counter() - t0) * 1000
             return InferResponse(ok=True, signal=signal, bpm=bpm,
-                                 latency_ms=round(latency,1), model_used="rppg_lite")
+                                 latency_ms=round(latency,1), model_used=model_used)
         except Exception as e:
             print(f"[Inference] rppg_lite error: {e} — fallback to rppg_signal")
 
     # ── Finger mode (+ face fallback): use rppg_signal ─────────────────────────
     if not _signal_loaded or _model_signal is None:
+        # If signal model not loaded but CHROM is available, return CHROM
+        if chrom_sig is not None:
+            return InferResponse(ok=True, signal=normalize(chrom_sig).tolist(),
+                                 bpm=chrom_bpm, latency_ms=round((time.perf_counter()-t0)*1000,1),
+                                 model_used="chrom_only")
         return InferResponse(ok=False, error="rppg_signal not loaded")
 
     try:
-        features = np.array(req.features, dtype=np.float32)
-        T = features.shape[0]
+        T = features_arr.shape[0]
         if T < 30:
             return InferResponse(ok=False, error=f"Too few frames: {T}")
 
         target_T = SEQ_LEN - 1
         if T < target_T:
             pad = np.zeros((target_T - T, 7), dtype=np.float32)
-            features = np.vstack([pad, features])
+            feat = np.vstack([pad, features_arr])
         else:
-            features = features[-target_T:]
+            feat = features_arr[-target_T:]
 
-        pred = _model_signal.predict(features[np.newaxis, ...], verbose=0)
+        pred = _model_signal.predict(feat[np.newaxis, ...], verbose=0)
         signal = normalize(pred[0]).tolist()
         bpm = bpm_from_signal(np.array(signal), fs=fps)
+        base_name = "rppg_signal_ubfc" if req.mode == "finger" else "rppg_signal_ubfc_fallback"
+        signal, bpm, model_used = _cross_validate(signal, bpm, base_name)
         latency = (time.perf_counter() - t0) * 1000
-        model_used = "rppg_signal_ubfc" if req.mode == "finger" else "rppg_signal_ubfc_fallback"
         return InferResponse(ok=True, signal=signal, bpm=bpm,
                              latency_ms=round(latency,1), model_used=model_used)
 

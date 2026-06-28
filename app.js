@@ -37,7 +37,7 @@ const RPPG_MODEL_CONFIGS = {
     frameH: 18, frameW: 18,
     inputChannels: 7,
     outputType: 'signal',
-    snrBias: 1.10,
+    snrBias: 0.88,  // conservative: ML chỉ thắng khi SNR cao hơn CHROM rõ rệt
   },
   finger: {
     url: './models/rppg_signal/model.json',
