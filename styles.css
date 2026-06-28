@@ -637,7 +637,7 @@ input::placeholder { color: rgba(96,117,144,0.65); }
   overflow: hidden;
   height: 480px;          /* explicit height để video fill đúng */
   border-radius: var(--r-lg);
-  background: linear-gradient(180deg, #1a2e4a 0%, #0a1828 100%);
+  background: #111;
   box-shadow: var(--shadow-lg);
   isolation: isolate;     /* ngăn backdrop-filter cha ảnh hưởng */
 }
