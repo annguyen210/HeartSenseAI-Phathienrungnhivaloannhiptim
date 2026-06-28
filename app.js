@@ -447,7 +447,7 @@ function bandpassFilter(signal, fps) {
 // CHROM (Chrominance-based rPPG) — de Haan & Jeanne 2013
 // Outperforms POS in varying/non-stationary lighting (office flicker, sunlight)
 // Used as Face PPG alternative: pick whichever has higher post-filter SNR
-function extractChromSignal(samples) {
+function extractChromSignal(samples, fps = 30) {
   if (samples.length < 10) return null;
   const meanR = average(samples.map(s => s.avgRed));
   const meanG = average(samples.map(s => s.avgGreen));
@@ -456,12 +456,21 @@ function extractChromSignal(samples) {
   const Cr = samples.map(s => s.avgRed / meanR - 1);
   const Cg = samples.map(s => s.avgGreen / meanG - 1);
   const Cb = samples.map(s => s.avgBlue / meanB - 1);
-  // Xs = 3Cr - 2Cg,  Ys = 1.5Cr + Cg - 1.5Cb
   const Xs = Cr.map((r, i) => 3 * r - 2 * Cg[i]);
   const Ys = Cr.map((r, i) => 1.5 * r + Cg[i] - 1.5 * Cb[i]);
-  const stdXs = stdDev(Xs), stdYs = stdDev(Ys);
-  if (!stdXs || !stdYs) return null;
-  const alpha = stdXs / stdYs;
+  // de Haan & Jeanne 2013: alpha MUST be computed on bandpassed X,Y to avoid
+  // motion/illumination drift biasing the skin-tone ratio → wrong alpha → wrong BPM
+  let alpha;
+  if (samples.length >= 20) {
+    const XsF = butterworthBandpass(Xs, fps);
+    const YsF = butterworthBandpass(Ys, fps);
+    const sXF = stdDev(XsF), sYF = stdDev(YsF);
+    alpha = (sXF && sYF) ? sXF / sYF : 1;
+  } else {
+    const sX = stdDev(Xs), sY = stdDev(Ys);
+    alpha = (sX && sY) ? sX / sY : 1;
+  }
+  // Return unfiltered CHROM (callers apply bandpass themselves via _snrOf / butterworthBandpass)
   return Xs.map((x, i) => x - alpha * Ys[i]);
 }
 
@@ -859,20 +868,27 @@ function computeTPR(rrs) {
 
 // POS (Plane Orthogonal to Skin) — Wang 2017 — dùng cả 3 kênh R/G/B
 // Cho Face rPPG chính xác hơn hẳn so với chỉ dùng Green channel
-function extractPosSignal(samples) {
+function extractPosSignal(samples, fps = 30) {
   if (samples.length < 10) return samples.map(s => s.avgGreen);
   const meanR = average(samples.map(s => s.avgRed));
   const meanG = average(samples.map(s => s.avgGreen));
   const meanB = average(samples.map(s => s.avgBlue));
   if (!meanR || !meanG || !meanB) return samples.map(s => s.avgGreen);
-  // Chuẩn hóa theo trung bình thời gian
   const Cr = samples.map(s => s.avgRed / meanR);
   const Cg = samples.map(s => s.avgGreen / meanG);
   const Cb = samples.map(s => s.avgBlue / meanB);
-  // H1 = Cg - Cb, H2 = -2Cr + Cg + Cb
   const H1 = Cg.map((g, i) => g - Cb[i]);
   const H2 = Cr.map((r, i) => -2 * r + Cg[i] + Cb[i]);
-  const alpha = stdDev(H2) > 0 ? stdDev(H1) / stdDev(H2) : 1;
+  // Wang 2017: compute alpha on bandpassed H1/H2 to eliminate motion/illumination bias
+  let alpha;
+  if (samples.length >= 20) {
+    const H1f = butterworthBandpass(H1, fps);
+    const H2f = butterworthBandpass(H2, fps);
+    const sH1 = stdDev(H1f), sH2 = stdDev(H2f);
+    alpha = (sH1 && sH2) ? sH1 / sH2 : 1;
+  } else {
+    alpha = stdDev(H2) > 0 ? stdDev(H1) / stdDev(H2) : 1;
+  }
   return H1.map((h, i) => h + alpha * H2[i]);
 }
 
@@ -979,7 +995,7 @@ function extractFaceRegionFusedSignal(samples, fps) {
     avgRed: s.regions[k].r, avgGreen: s.regions[k].g, avgBlue: s.regions[k].b
   }));
   const results = validKeys.map(k => {
-    const sig = extractChromSignal(toSamp(k));
+    const sig = extractChromSignal(toSamp(k), fps);
     if (!sig) return null;
     const snr = stdDev(butterworthBandpass(sig, fps));
     return { sig, snr };
@@ -1778,9 +1794,16 @@ function extractChromSlidingWindow(samples, fps) {
     const Cb  = seg.map(s => s.avgBlue  / mB - 1);
     const Xs  = Cr.map((r, i) => 3 * r - 2 * Cg[i]);
     const Ys  = Cr.map((r, i) => 1.5 * r + Cg[i] - 1.5 * Cb[i]);
-    const sX  = Math.sqrt(Xs.reduce((a, v) => a + v * v, 0) / Xs.length) || 1;
-    const sY  = Math.sqrt(Ys.reduce((a, v) => a + v * v, 0) / Ys.length) || 1;
-    const al  = sX / sY;
+    // Compute alpha on bandpassed segment to avoid drift bias
+    let al;
+    if (seg.length >= 30) {
+      const XsF = butterworthBandpass(Xs, fps);
+      const YsF = butterworthBandpass(Ys, fps);
+      const sXF = stdDev(XsF) || 1, sYF = stdDev(YsF) || 1;
+      al = sXF / sYF;
+    } else {
+      al = (stdDev(Xs) || 1) / (stdDev(Ys) || 1);
+    }
     for (let i = 0; i < winSize && start + i < n; i++) {
       const tapW = 0.5 * (1 - Math.cos(2 * Math.PI * i / (winSize - 1)));
       out[start + i] += (Xs[i] - al * Ys[i]) * tapW;
@@ -2136,8 +2159,8 @@ function analyzePPGSignal(rawSamples, mode, fps) {
     const ambCorrected = subtractAmbientReference(cleanSamples);
 
     // 2. Các method trích xuất tín hiệu
-    const posSignal    = extractPosSignal(ambCorrected);
-    const chromSignal  = extractChromSignal(ambCorrected);
+    const posSignal    = extractPosSignal(ambCorrected, fps);
+    const chromSignal  = extractChromSignal(ambCorrected, fps);
     const regionFused  = extractFaceRegionFusedSignal(cleanSamples, fps); // raw: dùng regions
     const icaSignal    = extractGreenResidualICA(ambCorrected);
     const warmupFrames    = Math.floor(fps * 3);
@@ -2283,12 +2306,13 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   // Nếu không, check BPM/2 — có thể đang đo harmonic thay vì fundamental
   if (mode === 'face' && allValid.length > 0) {
     const medianValid = [...allValid].sort((a,b)=>a-b)[Math.floor(allValid.length/2)];
-    if (medianValid > 115) {
+    // Lower threshold: catch 2nd-harmonic detections in the 80-100 BPM range
+    // (e.g. true HR=45 BPM → 2nd harmonic at 90 BPM, or true 50→100)
+    if (medianValid > 90) {
       const half = medianValid / 2;
-      const halfInRange = half >= 42 && half <= 100;
+      const halfInRange = half >= 40 && half <= 90;
       const strongConsensus = allValid.filter(b => Math.abs(b - medianValid) <= 8).length >= 5;
       if (!strongConsensus && halfInRange) {
-        // Likely harmonic — return null để trigger legacy fallback với tín hiệu gốc
         return null;
       }
     }

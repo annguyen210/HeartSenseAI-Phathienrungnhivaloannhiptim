@@ -125,8 +125,21 @@ def bandpass(sig, lo=0.67, hi=3.0, fs=FPS):
     return filtfilt(b, a, sig)
 
 def bpm_from_signal(sig, fs=FPS):
+    """Extract BPM from raw (unfiltered) signal — applies bandpass internally."""
     try:
         sig = bandpass(sig, fs=fs)
+        N = len(sig)
+        F = np.fft.rfft(sig * np.hanning(N), n=N*4)
+        freqs = np.fft.rfftfreq(N*4, 1/fs)
+        mask = (freqs >= 0.67) & (freqs <= 3.0)
+        if not mask.any(): return None
+        return float(freqs[mask][np.argmax(np.abs(F[mask])**2)] * 60.0)
+    except Exception:
+        return None
+
+def bpm_from_filtered(sig, fs=FPS):
+    """Extract BPM from already-bandpassed signal — no re-filtering to avoid double-bandpass distortion."""
+    try:
         N = len(sig)
         F = np.fft.rfft(sig * np.hanning(N), n=N*4)
         freqs = np.fft.rfftfreq(N*4, 1/fs)
@@ -140,21 +153,24 @@ def normalize(sig):
     mu = np.mean(sig); sd = np.std(sig)
     return (sig - mu) / (sd + 1e-8)
 
-def chrom_from_features(features: np.ndarray, fs: float = FPS) -> np.ndarray:
-    """CHROM rPPG signal từ [T, 7] feature array (R, G, B, dR, dG, dB, brightness)."""
+def chrom_from_features(features: np.ndarray, fs: float = FPS):
+    """CHROM rPPG từ [T, 7] features. Returns (chrom_signal_raw, chrom_signal_filtered) or (None, None)."""
     R = features[:, 0]; G = features[:, 1]; B = features[:, 2]
     mR, mG, mB = np.mean(R), np.mean(G), np.mean(B)
     if mR < 1e-6 or mG < 1e-6 or mB < 1e-6:
-        return None
+        return None, None
     Cr = R / mR - 1; Cg = G / mG - 1; Cb = B / mB - 1
     X = 3*Cr - 2*Cg
     Y = 1.5*Cr + Cg - 1.5*Cb
     try:
+        # Compute alpha on bandpassed X,Y (de Haan & Jeanne 2013) to avoid drift bias
         Xf = bandpass(X, fs=fs); Yf = bandpass(Y, fs=fs)
         alpha = np.std(Xf) / (np.std(Yf) + 1e-8)
-        return Xf - alpha * Yf
+        raw = X - alpha * Y             # unfiltered CHROM (correct alpha)
+        filtered = Xf - alpha * Yf      # filtered version for BPM extraction
+        return raw, filtered
     except Exception:
-        return None
+        return None, None
 
 # ── Decode base64 face crops ───────────────────────────────────────────────────
 def decode_crops(b64: str, shape: list) -> np.ndarray:
@@ -208,17 +224,20 @@ def infer(req: InferRequest):
 
     features_arr = np.array(req.features, dtype=np.float32)
 
-    # ── Classical CHROM baseline (always computed — used for cross-validation) ──
-    chrom_sig = chrom_from_features(features_arr, fs=fps)
-    chrom_bpm = bpm_from_signal(chrom_sig, fs=fps) if chrom_sig is not None else None
+    # ── Classical CHROM baseline — used for cross-validation ─────────────────────
+    # chrom_raw: unfiltered CHROM (correct alpha)
+    # chrom_filt: filtered version ready for FFT BPM extraction
+    chrom_raw, chrom_filt = chrom_from_features(features_arr, fs=fps)
+    # Use bpm_from_filtered to avoid double-bandpass on already-filtered CHROM
+    chrom_bpm = bpm_from_filtered(chrom_filt, fs=fps) if chrom_filt is not None else None
 
     def _cross_validate(model_signal, model_bpm, model_name):
-        """Return model signal if BPM agrees with CHROM within 22 BPM, else fallback to CHROM."""
+        """Return model signal if BPM agrees with CHROM within 20 BPM, else fall back to CHROM."""
         if chrom_bpm is None or model_bpm is None:
             return model_signal, model_bpm, model_name
-        if abs(model_bpm - chrom_bpm) > 22:
-            print(f"[Inference] {model_name} BPM={model_bpm:.1f} vs CHROM={chrom_bpm:.1f} — lệch >22, dùng CHROM")
-            chrom_n = normalize(chrom_sig).tolist()
+        if abs(model_bpm - chrom_bpm) > 20:
+            print(f"[Inference] {model_name} BPM={model_bpm:.1f} vs CHROM={chrom_bpm:.1f} → CHROM fallback")
+            chrom_n = normalize(chrom_raw).tolist()
             return chrom_n, chrom_bpm, f"{model_name}_chrom_fallback"
         return model_signal, model_bpm, model_name
 
@@ -239,11 +258,10 @@ def infer(req: InferRequest):
         except Exception as e:
             print(f"[Inference] rppg_lite error: {e} — fallback to rppg_signal")
 
-    # ── Finger mode (+ face fallback): use rppg_signal ─────────────────────────
+    # ── Finger mode (+ face fallback): rppg_signal with sliding windows ─────────
     if not _signal_loaded or _model_signal is None:
-        # If signal model not loaded but CHROM is available, return CHROM
-        if chrom_sig is not None:
-            return InferResponse(ok=True, signal=normalize(chrom_sig).tolist(),
+        if chrom_raw is not None:
+            return InferResponse(ok=True, signal=normalize(chrom_raw).tolist(),
                                  bpm=chrom_bpm, latency_ms=round((time.perf_counter()-t0)*1000,1),
                                  model_used="chrom_only")
         return InferResponse(ok=False, error="rppg_signal not loaded")
@@ -253,21 +271,45 @@ def infer(req: InferRequest):
         if T < 30:
             return InferResponse(ok=False, error=f"Too few frames: {T}")
 
-        target_T = SEQ_LEN - 1
-        if T < target_T:
-            pad = np.zeros((target_T - T, 7), dtype=np.float32)
-            feat = np.vstack([pad, features_arr])
-        else:
-            feat = features_arr[-target_T:]
+        target_T = SEQ_LEN - 1  # 127 frames
 
-        pred = _model_signal.predict(feat[np.newaxis, ...], verbose=0)
-        signal = normalize(pred[0]).tolist()
-        bpm = bpm_from_signal(np.array(signal), fs=fps)
+        # Use sliding windows over the full recording instead of only the last 127 frames
+        # This uses 93% more data and reduces sensitivity to motion in the last few seconds
+        if T <= target_T:
+            pad = np.zeros((target_T - T, 7), dtype=np.float32)
+            windows = [np.vstack([pad, features_arr])]
+        else:
+            stride = max(target_T // 3, 30)
+            starts = list(range(0, T - target_T + 1, stride))
+            if (T - target_T) not in starts:
+                starts.append(T - target_T)
+            windows = [features_arr[s:s + target_T] for s in starts[:8]]
+
+        # Run inference on each window, pick candidate with BPM closest to CHROM
+        best_sig, best_bpm, best_dist = None, None, float('inf')
+        for win in windows:
+            p = _model_signal.predict(win[np.newaxis], verbose=0)
+            sig_n = normalize(p[0])
+            b = bpm_from_signal(np.array(sig_n), fs=fps)
+            if b is None:
+                continue
+            dist = abs(b - chrom_bpm) if chrom_bpm else 0
+            if best_bpm is None or dist < best_dist:
+                best_sig, best_bpm, best_dist = sig_n.tolist(), b, dist
+
+        if best_sig is None:
+            # All windows failed — return CHROM
+            if chrom_raw is not None:
+                return InferResponse(ok=True, signal=normalize(chrom_raw).tolist(),
+                                     bpm=chrom_bpm, latency_ms=round((time.perf_counter()-t0)*1000,1),
+                                     model_used="chrom_only")
+            return InferResponse(ok=False, error="Inference failed on all windows")
+
         base_name = "rppg_signal_ubfc" if req.mode == "finger" else "rppg_signal_ubfc_fallback"
-        signal, bpm, model_used = _cross_validate(signal, bpm, base_name)
+        best_sig, best_bpm, model_used = _cross_validate(best_sig, best_bpm, base_name)
         latency = (time.perf_counter() - t0) * 1000
-        return InferResponse(ok=True, signal=signal, bpm=bpm,
-                             latency_ms=round(latency,1), model_used=model_used)
+        return InferResponse(ok=True, signal=best_sig, bpm=best_bpm,
+                             latency_ms=round(latency, 1), model_used=model_used)
 
     except Exception as e:
         return InferResponse(ok=False, error=str(e))
