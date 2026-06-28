@@ -8010,23 +8010,17 @@ async function runMeasurement() {
   // Lock AEC/AWB before sampling starts.
   // Face mode: AWB hunting creates colour shifts >> rPPG signal amplitude (0.1%).
   // Finger mode mobile: AEC hunts when finger covers lens.
-  // Both cases: wait for camera to settle first, then freeze exposure+white-balance.
+  // Wait for AEC/AWB to settle before locking — show hint in permissionHint (non-overlay).
   const settleMs = state.measurementMode === "face" ? 2000 : 700;
-  if (el.deepAnalysisPrompt) {
-    el.deepAnalysisText.classList.remove("hidden");
-    el.deepAnalysisText.textContent = "⏳ Chờ camera ổn định...";
-    el.deepAnalysisPrompt.classList.remove("hidden");
-  }
+  if (el.permissionHint) el.permissionHint.textContent = "⏳ Chờ camera ổn định...";
   await new Promise(r => setTimeout(r, settleMs));
   if (state.measurementMode === "face" || (state.measurementMode === "finger" && isMobile())) {
     const expLocked = await lockCameraExposure();
-    if (el.deepAnalysisPrompt) {
-      el.deepAnalysisText.textContent = expLocked
-        ? (state.measurementMode === "face" ? "🔒 Camera đã khoá — ngồi yên, nhìn thẳng vào camera!" : "🔒 Camera khoá — đặt ngón trỏ thật yên, bắt đầu đo!")
-        : (state.measurementMode === "face" ? "▶ Bắt đầu đo — ngồi yên, nhìn thẳng vào camera!" : "▶ Bắt đầu đo!");
+    if (el.permissionHint) {
+      el.permissionHint.textContent = expLocked ? "🔒 Camera đã khoá" : "";
     }
-  } else if (el.deepAnalysisPrompt) {
-    el.deepAnalysisPrompt.classList.add("hidden");
+  } else if (el.permissionHint) {
+    el.permissionHint.textContent = "";
   }
 
   const startedAt = performance.now();
