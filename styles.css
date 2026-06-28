@@ -637,12 +637,12 @@ input::placeholder { color: rgba(96,117,144,0.65); }
   overflow: hidden;
   height: 480px;          /* explicit height để video fill đúng */
   border-radius: var(--r-lg);
-  background: transparent;
+  background: linear-gradient(180deg, #1a2e4a 0%, #0a1828 100%);
   box-shadow: var(--shadow-lg);
-  isolation: isolate;
+  isolation: isolate;     /* ngăn backdrop-filter cha ảnh hưởng */
 }
 
-/* Video fill tuyệt đối, không bị méo — không filter để giữ màu tự nhiên */
+/* Video fill tuyệt đối, không bị méo */
 #cameraVideo {
   position: absolute;
   inset: 0;
@@ -650,6 +650,8 @@ input::placeholder { color: rgba(96,117,144,0.65); }
   height: 100%;
   object-fit: cover;
   display: block;
+  /* Tăng nhẹ độ sáng + tương phản để camera rõ nét hơn trong điều kiện ánh sáng thường */
+  filter: brightness(1.12) contrast(1.05);
 }
 
 .camera-overlay, .measurement-overlay {
@@ -1521,9 +1523,9 @@ input:focus, select:focus {
   box-shadow: 0 0 8px rgba(224,58,90,0.45);
 }
 
-/* ── Camera stage: transparent để video fill toàn bộ ─────────── */
+/* ── Camera stage: nền tối nhẹ hơn ─────────────────────────────── */
 .camera-stage {
-  background: transparent;
+  background: linear-gradient(180deg, #1c3050 0%, #0c1e34 100%);
 }
 
 /* ── Floating prompt: kiểu tag nhỏ gọn ─────────────────────────── */
