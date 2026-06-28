@@ -8007,16 +8007,26 @@ async function runMeasurement() {
   }
 
   // ── Finger mode: wait for AEC to settle, then lock exposure + white balance ──
-  // Auto-exposure hunts aggressively when the finger first covers the lens.
-  // We wait 700ms for it to stabilise, then freeze the values so the camera
-  // pipeline stops making brightness corrections during the 45-second recording.
-  // On iOS Safari: lockCameraExposure() returns false silently — no effect on UX.
-  if (state.measurementMode === "finger" && isMobile()) {
-    await new Promise(r => setTimeout(r, 700));
+  // Lock AEC/AWB before sampling starts.
+  // Face mode: AWB hunting creates colour shifts >> rPPG signal amplitude (0.1%).
+  // Finger mode mobile: AEC hunts when finger covers lens.
+  // Both cases: wait for camera to settle first, then freeze exposure+white-balance.
+  const settleMs = state.measurementMode === "face" ? 2000 : 700;
+  if (el.deepAnalysisPrompt) {
+    el.deepAnalysisText.classList.remove("hidden");
+    el.deepAnalysisText.textContent = "⏳ Chờ camera ổn định...";
+    el.deepAnalysisPrompt.classList.remove("hidden");
+  }
+  await new Promise(r => setTimeout(r, settleMs));
+  if (state.measurementMode === "face" || (state.measurementMode === "finger" && isMobile())) {
     const expLocked = await lockCameraExposure();
-    if (expLocked && el.deepAnalysisPrompt) {
-      el.deepAnalysisText.textContent = "🔒 Camera khoá — đặt ngón trỏ thật yên, bắt đầu đo!";
+    if (el.deepAnalysisPrompt) {
+      el.deepAnalysisText.textContent = expLocked
+        ? (state.measurementMode === "face" ? "🔒 Camera đã khoá — ngồi yên, nhìn thẳng vào camera!" : "🔒 Camera khoá — đặt ngón trỏ thật yên, bắt đầu đo!")
+        : (state.measurementMode === "face" ? "▶ Bắt đầu đo — ngồi yên, nhìn thẳng vào camera!" : "▶ Bắt đầu đo!");
     }
+  } else if (el.deepAnalysisPrompt) {
+    el.deepAnalysisPrompt.classList.add("hidden");
   }
 
   const startedAt = performance.now();
@@ -8119,7 +8129,7 @@ async function runMeasurement() {
   // ── Clean up: ROI tracking + exposure unlock ─────────────────────────────────
   if (state.ppgRoiSnapInterval) { clearInterval(state.ppgRoiSnapInterval); state.ppgRoiSnapInterval = null; }
   state.faceROI = null;
-  if (state.measurementMode === "finger") await unlockCameraExposure();
+  await unlockCameraExposure(); // unlock for both face and finger after measurement
   if (el.liveBpmDisplay) el.liveBpmDisplay.style.display = 'none';
 
   state.measurementActive = false;
