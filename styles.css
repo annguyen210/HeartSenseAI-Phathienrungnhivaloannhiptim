@@ -637,12 +637,12 @@ input::placeholder { color: rgba(96,117,144,0.65); }
   overflow: hidden;
   height: 480px;          /* explicit height để video fill đúng */
   border-radius: var(--r-lg);
-  background: #111;
+  background: transparent;
   box-shadow: var(--shadow-lg);
-  isolation: isolate;     /* ngăn backdrop-filter cha ảnh hưởng */
+  isolation: isolate;
 }
 
-/* Video fill tuyệt đối, không bị méo */
+/* Video fill tuyệt đối, không bị méo — không filter để giữ màu tự nhiên */
 #cameraVideo {
   position: absolute;
   inset: 0;
@@ -650,8 +650,6 @@ input::placeholder { color: rgba(96,117,144,0.65); }
   height: 100%;
   object-fit: cover;
   display: block;
-  /* Tăng nhẹ độ sáng + tương phản để camera rõ nét hơn trong điều kiện ánh sáng thường */
-  filter: brightness(1.12) contrast(1.05);
 }
 
 .camera-overlay, .measurement-overlay {
