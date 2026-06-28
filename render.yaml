@@ -3,7 +3,7 @@ services:
     name: heartsense
     runtime: node
     plan: free
-    buildCommand: npm install
+    buildCommand: pip install -r requirements.txt && npm install
     startCommand: node server.js
     autoDeploy: false
     envVars:

@@ -4709,15 +4709,16 @@ function spawnInferenceServer() {
   const scriptPath = path.join(__dirname, "inference_server.py");
   if (!fs.existsSync(scriptPath)) return;
 
-  const py = spawn("python", ["-u", scriptPath], {
+  const pyCmd = process.platform === "win32" ? "python" : "python3";
+  const py = spawn(pyCmd, ["-u", scriptPath], {
     cwd: __dirname,
     stdio: ["ignore", "pipe", "pipe"],
     detached: false,
   });
 
   py.on("error", (err) => {
-    console.error(`[AI] Không thể khởi động Python: ${err.message}`);
-    console.error(`[AI] Kiểm tra: python có trong PATH không? Thử gõ "python --version" trong CMD.`);
+    console.error(`[AI] Không thể khởi động Python (${pyCmd}): ${err.message}`);
+    console.error(`[AI] Kiểm tra: ${pyCmd} có trong PATH không?`);
   });
 
   py.stdout.on("data", d => { _inferRetries = 0; process.stdout.write(`[AI] ${d}`); });
