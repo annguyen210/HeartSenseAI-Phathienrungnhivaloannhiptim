@@ -8010,17 +8010,13 @@ async function runMeasurement() {
   // Lock AEC/AWB before sampling starts.
   // Face mode: AWB hunting creates colour shifts >> rPPG signal amplitude (0.1%).
   // Finger mode mobile: AEC hunts when finger covers lens.
-  // Wait for AEC/AWB to settle before locking — show hint in permissionHint (non-overlay).
-  const settleMs = state.measurementMode === "face" ? 2000 : 700;
-  if (el.permissionHint) el.permissionHint.textContent = "⏳ Chờ camera ổn định...";
-  await new Promise(r => setTimeout(r, settleMs));
-  if (state.measurementMode === "face" || (state.measurementMode === "finger" && isMobile())) {
+  // Finger mode on mobile: wait for AEC to settle after finger covers lens, then lock.
+  if (state.measurementMode === "finger" && isMobile()) {
+    await new Promise(r => setTimeout(r, 700));
     const expLocked = await lockCameraExposure();
-    if (el.permissionHint) {
-      el.permissionHint.textContent = expLocked ? "🔒 Camera đã khoá" : "";
+    if (expLocked && el.deepAnalysisPrompt) {
+      el.deepAnalysisText.textContent = "🔒 Camera khoá — đặt ngón trỏ thật yên, bắt đầu đo!";
     }
-  } else if (el.permissionHint) {
-    el.permissionHint.textContent = "";
   }
 
   const startedAt = performance.now();
@@ -8123,7 +8119,7 @@ async function runMeasurement() {
   // ── Clean up: ROI tracking + exposure unlock ─────────────────────────────────
   if (state.ppgRoiSnapInterval) { clearInterval(state.ppgRoiSnapInterval); state.ppgRoiSnapInterval = null; }
   state.faceROI = null;
-  await unlockCameraExposure(); // unlock for both face and finger after measurement
+  if (state.measurementMode === "finger") await unlockCameraExposure();
   if (el.liveBpmDisplay) el.liveBpmDisplay.style.display = 'none';
 
   state.measurementActive = false;
