@@ -1521,9 +1521,9 @@ input:focus, select:focus {
   box-shadow: 0 0 8px rgba(224,58,90,0.45);
 }
 
-/* ── Camera stage: nền tối nhẹ hơn ─────────────────────────────── */
+/* ── Camera stage: transparent để video fill toàn bộ ─────────── */
 .camera-stage {
-  background: linear-gradient(180deg, #1c3050 0%, #0c1e34 100%);
+  background: transparent;
 }
 
 /* ── Floating prompt: kiểu tag nhỏ gọn ─────────────────────────── */
