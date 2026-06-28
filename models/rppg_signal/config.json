@@ -1,0 +1,6 @@
+{
+  "trainedOn": "UBFC-rPPG real data",
+  "subjects": 42,
+  "bpmMae": 4.82,
+  "bpmP90": 10.63
+}

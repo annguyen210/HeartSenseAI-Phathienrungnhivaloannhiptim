@@ -83,6 +83,16 @@
                 </select>
               </label>
               <label>Bệnh lý nền <input name="conditions" type="text" placeholder="Cao huyết áp, tiểu đường, đột quỵ, afib" /></label>
+              <label>Nhóm máu
+                <select name="bloodType">
+                  <option value="Chưa khai báo">Chưa rõ</option>
+                  <option value="A+">A+</option><option value="A-">A-</option>
+                  <option value="B+">B+</option><option value="B-">B-</option>
+                  <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                  <option value="O+">O+</option><option value="O-">O-</option>
+                </select>
+              </label>
+              <label>Dị ứng thuốc / thực phẩm <input name="allergy" type="text" placeholder="Penicillin, hải sản... (bỏ trống nếu không có)" /></label>
               <button class="primary-btn" type="submit">Đăng ký và tạo hồ sơ</button>
             </form>
 
@@ -172,10 +182,24 @@
 
             <div class="stack-form">
               <div class="signal-grid">
-                <article><span>Độ sáng</span><strong id="lightMetric">--</strong></article>
+                <article id="lightMetricBox"><span id="lightMetricLabel">Độ sáng</span><strong id="lightMetric">--</strong></article>
                 <article><span>Độ ổn định</span><strong id="stabilityMetric">--</strong></article>
                 <article><span>Chất lượng</span><strong id="qualityMetric">--</strong></article>
                 <article><span>Chế độ</span><strong id="captureModeLabel">Face PPG</strong></article>
+              </div>
+              <!-- Finger-on-lens guidance bar — shown only in finger mode -->
+              <div id="fingerLensGuide" style="display:none;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 14px;margin-top:4px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                  <span style="font-size:12px;color:#94a3b8;font-weight:600">Phủ ngón tay</span>
+                  <strong id="coveragePct" style="font-size:15px;color:#64748b">--%</strong>
+                </div>
+                <div style="background:#1e293b;border-radius:4px;height:8px;overflow:hidden">
+                  <div id="coverageBar" style="height:100%;width:0%;background:#64748b;transition:width 0.2s,background 0.2s;border-radius:4px"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;margin-top:6px">
+                  <span id="pressureHint" style="font-size:11px;color:#64748b">Ngón trỏ nằm ngang: đầu ngón che camera, thân ngón che flash</span>
+                  <span id="piStrength" style="font-size:11px;color:#64748b">PI: --</span>
+                </div>
               </div>
 
               <div class="permission-box">
@@ -1046,7 +1070,7 @@
               <div class="panel-head"><h3>🖱️ Phân tích Vi rung ngón tay (BCG)</h3><span class="badge neutral">Passive Monitoring</span></div>
               <p class="muted" style="font-size:12px">Cử động chuột của bạn chứa "dấu ấn" nhịp tim — mỗi nhịp đập tạo vi rung truyền lên ngón tay. Phân tích 30 giây di chuột để sàng lọc nhịp bất thường thụ động.</p>
               <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-                <button id="startBCGBtn" class="secondary-btn" type="button">🖱️ Bắt đầu BCG chuột (30s)</button>
+                <button id="startBCGBtn" class="secondary-btn" type="button">🖱️ Bắt đầu BCG chuột / chạm (40s)</button>
                 <button id="stopBCGBtn" class="ghost-btn" type="button" style="display:none">⏹ Dừng sớm</button>
               </div>
               <div id="bcgResultBox" class="list-box"><p class="muted">Bấm nút trên và di chuột tự nhiên liên tục trong 30 giây.</p></div>
@@ -1103,10 +1127,13 @@
                 <button class="secondary-btn" onclick="document.getElementById('bpPhotoInput').click()">📷 Chụp ảnh máy đo HA</button>
               </div>
               <div id="bpOCRStatus" class="muted" style="font-size:12px;margin-top:6px"></div>
-              <div class="button-row" style="margin-top:8px;gap:6px">
-                <div style="flex:1"><label style="font-size:12px;color:#64748b">Tâm thu (mmHg)<input id="bpSysInput" type="number" min="60" max="220" placeholder="120" style="width:100%;margin-top:2px"/></label></div>
-                <div style="flex:1"><label style="font-size:12px;color:#64748b">Tâm trương (mmHg)<input id="bpDiaInput" type="number" min="40" max="150" placeholder="80" style="width:100%;margin-top:2px"/></label></div>
+              <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+                <label style="font-size:12px;color:#64748b">Tâm thu (mmHg)<input id="bpSysInput" type="number" min="60" max="220" placeholder="120" style="width:100%;margin-top:2px"/></label>
+                <label style="font-size:12px;color:#64748b">Tâm trương (mmHg)<input id="bpDiaInput" type="number" min="40" max="150" placeholder="80" style="width:100%;margin-top:2px"/></label>
+                <label style="font-size:12px;color:#64748b">Nhịp tim (BPM)<input id="bpPulseInput" type="number" min="30" max="220" placeholder="72" style="width:100%;margin-top:2px"/></label>
               </div>
+              <button id="calcBpMetricsBtn" class="secondary-btn" type="button" style="width:100%;margin-top:8px">🩺 Tính chỉ số tim mạch từ huyết áp</button>
+              <div id="bpMetricsResult" style="margin-top:8px;display:none"></div>
               <button id="saveBpOcrBtn" class="primary-btn" type="button" style="width:100%;margin-top:8px;display:none">💾 Lưu chỉ số huyết áp vào hệ thống</button>
               <div id="bpOCRSaveStatus" style="font-size:12px;color:#6b7280;margin-top:4px;min-height:14px"></div>
             </article>

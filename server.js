@@ -343,6 +343,7 @@ function summarizeUser(user) {
   return {
     id: user.id, fullName: user.fullName, email: user.email,
     age: user.age, gender: user.gender, conditions: user.conditions || [],
+    allergy: user.allergy || "Không có", bloodType: user.bloodType || "Chưa khai báo",
     guardian: user.guardian || {}, baseline: user.baseline || { sessions: [], complete: false },
     pillProtocol: user.pillProtocol || null, remoteParent: user.remoteParent || null,
     createdAt: user.createdAt,
@@ -3002,6 +3003,18 @@ ${prepSection}
   <span style="font-size:11px">HEARTSENSE v4.0 &nbsp;|&nbsp; Xuất ngày: ${new Date().toLocaleString("vi-VN", { timeZone: 'Asia/Ho_Chi_Minh' })} &nbsp;|&nbsp; Token: ${exportToken || "direct"}</span>
 </div>
 
+<div class="no-print" style="text-align:center;margin:24px 0 40px">
+  <button onclick="window.print()" style="background:#0369a1;color:#fff;border:none;border-radius:10px;padding:14px 36px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.15)">🖨️ In / Lưu PDF</button>
+  <p style="font-size:12px;color:#64748b;margin:8px 0 0">Chọn "Lưu dưới dạng PDF" trong hộp thoại in để xuất file PDF</p>
+</div>
+
+<style>
+@media print {
+  .no-print { display: none !important; }
+  body { margin: 0; }
+}
+</style>
+
 </body></html>`;
 }
 
@@ -3372,6 +3385,8 @@ function handleRegister(body, res) {
     age: Number(body.age || 60),
     gender: body.gender || "other",
     conditions: parseConditions(body.conditions),
+    allergy: String(body.allergy || "").trim() || "Không có",
+    bloodType: String(body.bloodType || "").trim() || "Chưa khai báo",
     guardian: { guardianName: "", guardianPhone: "", guardianEmail: "", status: "not_configured", channels: [] },
     weatherQuery: WEATHER_DEFAULT_QUERY,
     baseline: { sessions: [], restingBpm: null, hrvScore: null, regularityScore: null, complete: false },
@@ -3516,6 +3531,7 @@ async function handleCreateMeasurement(urlObject, body, res) {
       const names = activeProtocols.map(p => p.medicineName).join(", ");
       pillAlert = {
         triggered: true,
+        protocolIds: activeProtocols.map(p => p.id),
         protocols: activeProtocols.map(p => ({ medicineName: p.medicineName, dose: p.dose, instructions: p.instructions })),
         message: activeProtocols.length === 1
           ? `Phát hiện AFib! Uống thuốc: ${activeProtocols[0].medicineName} ${activeProtocols[0].dose}`
@@ -4250,6 +4266,27 @@ async function handleMedicationAdherence(urlObject, body, res) {
   sendJson(res, 200, { ok: true, adherencePct, takenDays, totalDays });
 }
 
+// ─── Pill-in-Pocket confirm ────────────────────────────────────────────────────
+async function handlePipConfirm(urlObject, body, res) {
+  const session = getSessionFromRequest(urlObject, body);
+  const user = getUserBySession(session);
+  if (!user) { sendJson(res, 401, { error: "Cần đăng nhập." }); return; }
+  const ids = Array.isArray(body.protocolIds) ? body.protocolIds : [];
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const protocols = readJson("pillProtocols");
+  let updated = 0;
+  for (const p of protocols) {
+    if (p.userId === user.id && ids.includes(p.id)) {
+      if (!p.pipAdherence) p.pipAdherence = {};
+      p.pipAdherence[dateKey] = { taken: true, takenAt: new Date().toISOString() };
+      updated++;
+    }
+  }
+  if (updated > 0) writeJson("pillProtocols", protocols);
+  appendLedgerEntry(user.id, "pip.confirm", "Xac nhan uong thuoc PIP", { ids, date: dateKey });
+  sendJson(res, 200, { ok: true, updated });
+}
+
 // ─── Delete Measurement (#new) ────────────────────────────────────────────────
 async function handleDeleteMeasurement(urlObject, body, res) {
   const session = getSessionFromRequest(urlObject, body);
@@ -4476,19 +4513,33 @@ Quy tắc: tiếng Việt, giọng bác sĩ chuyên khoa — ấm áp, chuyên s
 
 // ─── Zalo Tele-Clinic webhook (G6/C) — skeleton for future integration ────────
 async function handleZaloWebhook(urlObject, body, res) {
-  // Infrastructure ready — activate by providing ZALO_APP_ID + ZALO_APP_SECRET
   const ZALO_APP_ID = process.env.ZALO_APP_ID || "";
   const ZALO_OA_TOKEN = process.env.ZALO_OA_TOKEN || "";
   if (!ZALO_APP_ID || !ZALO_OA_TOKEN) {
-    sendJson(res, 200, { ok: false, message: "Zalo API chưa được cấu hình. Liên hệ admin để kích hoạt." });
+    sendJson(res, 503, { ok: false, message: "Tính năng Zalo OA chưa được kích hoạt trên server. Vui lòng dùng chia sẻ link báo cáo thủ công." });
     return;
   }
   // When activated: POST to Zalo OA API to send message
-  const { userId, message } = body;
   const session = getSessionFromRequest(urlObject, body);
   if (!session) { sendJson(res, 401, { error: "Cần đăng nhập." }); return; }
-  // Placeholder for Zalo API call
-  sendJson(res, 200, { ok: true, message: "Tin nhắn Zalo đã được gửi (skeleton)." });
+  sendJson(res, 501, { ok: false, message: "Zalo OA API integration chưa hoàn thiện." });
+}
+
+// ─── Update user profile ───────────────────────────────────────────────────────
+function handleUpdateProfile(urlObject, body, res) {
+  const session = getSessionFromRequest(urlObject, body);
+  const users = readJson("users");
+  const user = users.find((u) => u.id === session?.userId);
+  if (!user) { sendJson(res, 401, { error: "Cần đăng nhập." }); return; }
+  if ("fullName" in body) user.fullName = String(body.fullName || "").trim() || user.fullName;
+  if ("age" in body) { const a = Number(body.age); if (a >= 1 && a <= 120) user.age = a; }
+  if ("gender" in body && ["male","female","other"].includes(body.gender)) user.gender = body.gender;
+  if ("conditions" in body) user.conditions = parseConditions(body.conditions);
+  if ("allergy" in body) user.allergy = String(body.allergy || "").trim() || "Không có";
+  if ("bloodType" in body) user.bloodType = String(body.bloodType || "").trim() || "Chưa khai báo";
+  writeJson("users", users);
+  appendLedgerEntry(user.id, "profile.update", "Cap nhat ho so", { allergy: user.allergy, bloodType: user.bloodType });
+  sendJson(res, 200, { ok: true, user: summarizeUser(user) });
 }
 
 // ─── Population Stats (#new) ──────────────────────────────────────────────────
@@ -4558,6 +4609,7 @@ async function handleRequest(req, res) {
   if (req.method === "POST" && p === "/api/auth/login") { handleLogin(await parseBody(req), res); return; }
   if (p === "/api/session" && (req.method === "GET" || req.method === "POST")) { handleSession(urlObject, req.method === "POST" ? await parseBody(req) : {}, res); return; }
   if (req.method === "PUT" && p === "/api/guardian") { handleGuardian(urlObject, await parseBody(req), res); return; }
+  if (req.method === "PUT" && p === "/api/profile") { handleUpdateProfile(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/measurements") { await handleCreateMeasurement(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/measurements/context") { await handleMeasurementContext(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/baseline") { await handleRecordBaseline(urlObject, await parseBody(req), res); return; }
@@ -4620,6 +4672,7 @@ async function handleRequest(req, res) {
   if (req.method === "POST" && p === "/api/pill-protocol") { await handleSavePillProtocol(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/export-token") { await handleGenerateExportToken(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/holter-log") { await handleSaveHolterLog(urlObject, await parseBody(req), res); return; }
+  if (req.method === "POST" && p === "/api/pip/confirm") { await handlePipConfirm(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/medications/adherence") { await handleMedicationAdherence(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/measurements/delete") { await handleDeleteMeasurement(urlObject, await parseBody(req), res); return; }
   if (req.method === "GET" && p === "/api/population-stats") { handlePopulationStats(res); return; }
@@ -4631,6 +4684,10 @@ async function handleRequest(req, res) {
   if (req.method === "POST" && p === "/api/afib-context") { await handleAfibContext(urlObject, await parseBody(req), res); return; }
   if (req.method === "POST" && p === "/api/zalo-clinic") { await handleZaloWebhook(urlObject, await parseBody(req), res); return; }
 
+  // ── rPPG Inference proxy → Python inference_server.py (port 4001) ──────────
+  if (req.method === "POST" && p === "/api/rppg-inference") { await handleRppgInference(await parseBody(req), res); return; }
+  if (req.method === "GET"  && p === "/api/rppg-inference/health") { await handleRppgHealth(res); return; }
+
   if ((req.method === "GET" || req.method === "POST") && p.startsWith("/api/users/") && p.endsWith("/dashboard")) { const b = req.method === "POST" ? await parseBody(req) : {}; await handleDashboard(urlObject, b, res, p.split("/")[3]); return; }
   if (req.method === "GET" && p.startsWith("/api/users/") && p.endsWith("/report")) { await handleReport(urlObject, res, p.split("/")[3]); return; }
   if (req.method === "GET" && p.startsWith("/api/users/") && p.endsWith("/doctor-export")) { await handleDoctorExport(urlObject, res, p.split("/")[3]); return; }
@@ -4640,7 +4697,77 @@ async function handleRequest(req, res) {
   serveStatic(urlObject, res);
 }
 
+// ── rPPG Inference proxy + auto-spawn Python server ───────────────────────────
+const INFER_URL = "http://127.0.0.1:4001/infer";
+const INFER_HEALTH_URL = "http://127.0.0.1:4001/health";
+
+let _inferRetries = 0;
+const INFER_MAX_RETRIES = 5;
+
+function spawnInferenceServer() {
+  const { spawn } = require("child_process");
+  const scriptPath = path.join(__dirname, "inference_server.py");
+  if (!fs.existsSync(scriptPath)) return;
+
+  const py = spawn("python", ["-u", scriptPath], {
+    cwd: __dirname,
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: false,
+  });
+
+  py.on("error", (err) => {
+    console.error(`[AI] Không thể khởi động Python: ${err.message}`);
+    console.error(`[AI] Kiểm tra: python có trong PATH không? Thử gõ "python --version" trong CMD.`);
+  });
+
+  py.stdout.on("data", d => { _inferRetries = 0; process.stdout.write(`[AI] ${d}`); });
+  py.stderr.on("data", d => {
+    const msg = d.toString();
+    if (!msg.includes("DeprecationWarning") && !msg.includes("UserWarning") && !msg.includes("NumPy")) {
+      process.stderr.write(`[AI] ${msg}`);
+    }
+  });
+  py.on("exit", (code) => {
+    if (code === 0 || code === null) return;
+    _inferRetries++;
+    if (_inferRetries > INFER_MAX_RETRIES) {
+      console.error(`[AI] Inference server failed ${INFER_MAX_RETRIES} lần — dừng. Kiểm tra Python + dependencies.`);
+      return;
+    }
+    console.warn(`[AI] Inference server exited (${code}), restart ${_inferRetries}/${INFER_MAX_RETRIES} in 5s...`);
+    setTimeout(() => spawnInferenceServer(), 5000);
+  });
+
+  process.on("exit", () => { try { py.kill(); } catch (_) {} });
+}
+
+async function handleRppgInference(body, res) {
+  try {
+    const resp = await nodeFetch(INFER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      timeout: 10000,
+    });
+    const data = await resp.json();
+    sendJson(res, resp.status, data);
+  } catch (e) {
+    sendJson(res, 503, { ok: false, error: "Inference server unavailable", detail: e.message });
+  }
+}
+
+async function handleRppgHealth(res) {
+  try {
+    const resp = await nodeFetch(INFER_HEALTH_URL, { timeout: 3000 });
+    const data = await resp.json();
+    sendJson(res, 200, data);
+  } catch (e) {
+    sendJson(res, 503, { ok: false, model_loaded: false, error: e.message });
+  }
+}
+
 initDataStore().then(() => {
+  spawnInferenceServer(); // Auto-start Python inference server
   updateSyncStats();
   cleanupExpiredSessions(); // #8: remove expired sessions on startup
   startAutoReportScheduler();
