@@ -183,13 +183,18 @@ def decode_crops(b64: str, shape: list) -> np.ndarray:
 def build_lite_input(crops: np.ndarray) -> np.ndarray:
     """[T, 18, 18, 3] → [1, T-1, 18, 18, 6] appearance+motion."""
     T = LITE_SEQ
-    # Take last T frames
+    # Take last T frames (skip warmup already applied by caller)
     if len(crops) >= T:
         crops = crops[-T:]
     elif len(crops) < 10:
         return None
-    appear = crops[1:].astype(np.float32)          # [T-1, 18, 18, 3]
-    motion = (crops[1:] - crops[:-1]).astype(np.float32)
+    cur = crops[1:].astype(np.float32)   # [T-1, 18, 18, 3]
+    prv = crops[:-1].astype(np.float32)
+    appear = cur
+    # MTTS-CAN normalized ratio: Δ_t = (f_t − f_{t−1}) / (f_t + f_{t−1} + ε)
+    # Phải khớp với preprocessing lúc training — KHÔNG dùng simple diff
+    # Simple diff cho giá trị ≈ 10-30× nhỏ hơn → model thấy distribution hoàn toàn khác
+    motion = (cur - prv) / (cur + prv + 1e-6)
     x = np.concatenate([appear, motion], axis=-1)  # [T-1, 18, 18, 6]
     return x[np.newaxis, ...]                       # [1, T-1, 18, 18, 6]
 
@@ -232,10 +237,12 @@ def infer(req: InferRequest):
     chrom_bpm = bpm_from_filtered(chrom_filt, fs=fps) if chrom_filt is not None else None
 
     def _cross_validate(model_signal, model_bpm, model_name):
-        """Return model signal if BPM agrees with CHROM within 20 BPM, else fall back to CHROM."""
+        """Return model signal if BPM agrees with CHROM within 12 BPM, else fall back to CHROM.
+        Threshold 12 BPM: model sai > 12 BPM so với CHROM cơ bản → không đáng tin, dùng CHROM.
+        (Threshold cũ 20 BPM quá rộng — model sai 18 BPM vẫn pass và corrupt final result.)"""
         if chrom_bpm is None or model_bpm is None:
             return model_signal, model_bpm, model_name
-        if abs(model_bpm - chrom_bpm) > 20:
+        if abs(model_bpm - chrom_bpm) > 12:
             print(f"[Inference] {model_name} BPM={model_bpm:.1f} vs CHROM={chrom_bpm:.1f} → CHROM fallback")
             chrom_n = normalize(chrom_raw).tolist()
             return chrom_n, chrom_bpm, f"{model_name}_chrom_fallback"

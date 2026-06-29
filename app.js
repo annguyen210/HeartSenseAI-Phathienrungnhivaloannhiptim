@@ -37,7 +37,7 @@ const RPPG_MODEL_CONFIGS = {
     frameH: 18, frameW: 18,
     inputChannels: 7,
     outputType: 'signal',
-    snrBias: 0.88,  // conservative: ML chỉ thắng khi SNR cao hơn CHROM rõ rệt
+    snrBias: 1.15,  // motion encoding đã fix → model rppg_lite face-specific, tin tưởng cao hơn
   },
   finger: {
     url: './models/rppg_signal/model.json',
@@ -814,19 +814,28 @@ function computeKalmanBpmSeries(filtered, fps, mode) {
 // ── BPM Confidence Interval ───────────────────────────────────────────────────
 // Tính khoảng tin cậy BPM dựa trên spread của multi-window estimates + signal quality.
 // Output: { bpm, ciRange, label: 'high'|'moderate'|'low' }
-function estimateBpmConfidence(bpmSeries, signalQuality, finalBpm) {
+function estimateBpmConfidence(bpmSeries, signalQuality, finalBpm, mode) {
+  const isFace = mode === 'face';
   if (!bpmSeries || bpmSeries.length < 2) {
-    return { ciRange: 15, label: 'low', display: `${finalBpm} ±≥15 BPM` };
+    // Face fallback thấp hơn finger (signal tự nhiên kém hơn)
+    const fbCI = isFace ? 10 : 15;
+    return { ciRange: fbCI, label: 'low', display: `${finalBpm} ±≥${fbCI} BPM` };
   }
   const sorted = [...bpmSeries].sort((a, b) => a - b);
   const p25 = sorted[Math.floor(sorted.length * 0.25)];
   const p75 = sorted[Math.floor(sorted.length * 0.75)];
   const iqr = p75 - p25;
-  // Confidence interval: IQR/2 điều chỉnh theo signal quality
   const qFactor = Math.max(0.5, signalQuality / 100);
-  const ciRange = Math.round(Math.max(2, iqr * 0.6 / qFactor));
-  const label = signalQuality >= 85 && ciRange <= 4 ? 'high'
-              : signalQuality >= 68 && ciRange <= 8 ? 'moderate' : 'low';
+  // Face: IQR multiplier 0.35 (SNR thấp hơn → chuỗi BPM dao động nhiều hơn tự nhiên)
+  // Finger: IQR multiplier 0.60
+  const iqrMult = isFace ? 0.35 : 0.60;
+  const ciRange = Math.round(Math.max(2, iqr * iqrMult / qFactor));
+  // Face: ngưỡng thực tế hơn (rPPG face luôn có SNR thấp hơn finger truyền sáng)
+  const label = isFace
+    ? (signalQuality >= 70 && ciRange <= 8  ? 'high'
+    :  signalQuality >= 55 && ciRange <= 14 ? 'moderate' : 'low')
+    : (signalQuality >= 85 && ciRange <= 4  ? 'high'
+    :  signalQuality >= 68 && ciRange <= 8  ? 'moderate' : 'low');
   const arrow = label === 'high' ? '🟢' : label === 'moderate' ? '🟡' : '🔴';
   return {
     ciRange,
@@ -2194,6 +2203,13 @@ function analyzePPGSignal(rawSamples, mode, fps) {
 
     const best = effectiveMethods.reduce((b, c) => c.effective > b.effective ? c : b);
     rawSignal = best.sig;
+
+    // Face R/G coherence: tính bandpass của từng kênh để dùng cho coherenceBonus
+    // Threshold mềm hơn finger (face không có flash truyền sáng)
+    const _faceRaw = cleanSamples.map(s => s.avgRed);
+    const _faceGrn = cleanSamples.map(s => s.avgGreen);
+    _filtRed   = butterworthBandpass(_faceRaw, fps);
+    _filtGreen = butterworthBandpass(_faceGrn, fps);
   }
 
   // Butterworth 4th-order zero-phase bandpass (thay bandpassFilter 1st-order cũ)
@@ -2299,18 +2315,18 @@ function analyzePPGSignal(rawSamples, mode, fps) {
 
   // Require at least 2 independent methods before reporting BPM.
   if (allValid.length < 2) return null;
-  // 2-method agreement: threshold 8 BPM (unchanged — rejects low-confidence cases)
-  if (allValid.length === 2 && Math.max(...allValid) - Math.min(...allValid) > 8) return null;
+  // Face mode cho phép 2 methods lệch nhau đến 10 BPM (signal noisier hơn finger)
+  const _twoMethodTol = mode === 'face' ? 10 : 8;
+  if (allValid.length === 2 && Math.max(...allValid) - Math.min(...allValid) > _twoMethodTol) return null;
 
   // Face mode: BPM > 115 tại rest rất hiếm — cần ≥5 method đồng thuận trong 10 BPM
   // Nếu không, check BPM/2 — có thể đang đo harmonic thay vì fundamental
+  // Threshold nâng từ 90→108 để tránh false-reject HR bình thường 90-108 BPM
   if (mode === 'face' && allValid.length > 0) {
     const medianValid = [...allValid].sort((a,b)=>a-b)[Math.floor(allValid.length/2)];
-    // Lower threshold: catch 2nd-harmonic detections in the 80-100 BPM range
-    // (e.g. true HR=45 BPM → 2nd harmonic at 90 BPM, or true 50→100)
-    if (medianValid > 90) {
+    if (medianValid > 108) {
       const half = medianValid / 2;
-      const halfInRange = half >= 40 && half <= 90;
+      const halfInRange = half >= 40 && half <= 95;
       const strongConsensus = allValid.filter(b => Math.abs(b - medianValid) <= 8).length >= 5;
       if (!strongConsensus && halfInRange) {
         return null;
@@ -2356,6 +2372,39 @@ function analyzePPGSignal(rawSamples, mode, fps) {
 
   if (!estimatedBpm) return null;
 
+  // ── Face harmonic post-check: khi TẤT CẢ methods lock vào 2nd harmonic ───────
+  // rejectHarmonicOutliers chỉ hoạt động khi có THIỂU SỐ phiếu cho fundamental.
+  // Nếu toàn bộ methods đồng thuận vào 2× HR thật (diastolic notch mạnh) → sai.
+  // DFT trực tiếp tại estimatedBpm/2: nếu power ≥38% power tại estimatedBpm
+  // → fundamental nằm ở estimatedBpm/2, không phải estimatedBpm.
+  if (mode === 'face' && estimatedBpm > 78 && estimatedBpm <= 180) {
+    const _halfBpm = estimatedBpm / 2;
+    if (_halfBpm >= 40 && _halfBpm <= 100) {
+      const _n = filtered.length;
+      const _wH = 2 * Math.PI * (_halfBpm / 60) / fps;
+      const _wF = 2 * Math.PI * (estimatedBpm / 60) / fps;
+      let _reH = 0, _imH = 0, _reF = 0, _imF = 0;
+      for (let _k = 0; _k < _n; _k++) {
+        _reH += filtered[_k] * Math.cos(_wH * _k); _imH -= filtered[_k] * Math.sin(_wH * _k);
+        _reF += filtered[_k] * Math.cos(_wF * _k); _imF -= filtered[_k] * Math.sin(_wF * _k);
+      }
+      const _halfPow = _reH * _reH + _imH * _imH;
+      const _fullPow = _reF * _reF + _imF * _imF;
+      if (_fullPow > 0 && _halfPow >= _fullPow * 0.38) {
+        estimatedBpm = _halfBpm;
+      }
+    }
+  }
+  // Sub-harmonic check: nếu face BPM quá thấp, kiểm tra 2× có hợp lý hơn không
+  if (mode === 'face' && estimatedBpm < 50 && estimatedBpm >= 25) {
+    const _dblBpm = estimatedBpm * 2;
+    if (_dblBpm >= 40 && _dblBpm <= 185) {
+      const _dblSupport = allValid.filter(b => Math.abs(b - _dblBpm) <= 8).length;
+      const _estSupport = allValid.filter(b => Math.abs(b - estimatedBpm) <= 8).length;
+      if (_dblSupport >= _estSupport) estimatedBpm = _dblBpm;
+    }
+  }
+
   // ── Cross-channel coherence validation (finger mode only) ────────────────────
   // Nếu cả R và G đều có pulsatile signal tại cùng tần số tim → đây là signal thật.
   // Coherence < 0.12: rất có thể noise → từ chối hoặc giảm quality.
@@ -2364,8 +2413,9 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   const rgCoherence = (_filtRed && _filtGreen)
     ? crossChannelCoherence(_filtRed, _filtGreen, fps, _cardiacHz)
     : null;
-  // Nếu coherence rất thấp (không có pulsatile signal tại cardiac freq) → từ chối
-  if (rgCoherence !== null && rgCoherence < 0.12) return null;
+  // Rejection gate: finger (flash) cần coherence ≥ 0.12; face (ambient) ngưỡng thấp hơn
+  const _cohRejectThresh = mode === 'face' ? 0.04 : 0.12;
+  if (rgCoherence !== null && rgCoherence < _cohRejectThresh) return null;
 
   // ── Kalman-smoothed BPM từ multi-window time series ───────────────────────────
   // Cải thiện accuracy: tracking BPM mỗi 3s → Kalman filter → loại outlier sinh lý
@@ -2419,7 +2469,7 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   const { signal: filteredWindow, start: winStart } = selectBestFilteredWindow(filtered, fps, 20);
 
   // Tính confidence interval từ bpmSeries
-  const bpmCI = estimateBpmConfidence(bpmSeries, 75, bpm); // signalQuality computed later
+  const bpmCI = estimateBpmConfidence(bpmSeries, 75, bpm, mode); // signalQuality computed later
 
   // ── RR intervals từ peaks trong best window ──────────────────────────────────
   // Ensemble peak selection: chọn method cho nhiều RR intervals hợp lý nhất
@@ -2465,7 +2515,12 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   // BMI adjustment: mô mỡ dày → ánh sáng xuyên ít hơn → threshold brightness thấp hơn
   const _bmi = parseFloat(localStorage.getItem("hs_bmi") || "22");
   const _bmiAdj = _bmi > 35 ? -9 : _bmi > 30 ? -5 : _bmi < 18.5 ? +4 : 0;
-  const _skinTarget = (state.skinTone === 'dark' ? 100 : state.skinTone === 'light' ? 130 : 118) + _bmiAdj;
+  // Face mode: ánh sáng phản xạ từ mặt điều kiện phòng → brightness ~130-180.
+  // Finger mode: ánh sáng truyền qua ngón + flash → brightness ~80-130.
+  // Target calibrate riêng để lightScore không bị penalize sai cho face.
+  const _skinTarget = mode === 'face'
+    ? (state.skinTone === 'dark' ? 120 : state.skinTone === 'light' ? 175 : 150) + _bmiAdj
+    : (state.skinTone === 'dark' ? 100 : state.skinTone === 'light' ? 130 : 118) + _bmiAdj;
   const lightScores = cleanSamples.map(s => Math.max(18, Math.min(99, 100 - Math.abs(s.brightness - _skinTarget) * 0.9)));
   const movementScores = cleanSamples.map(s => Math.max(12, Math.min(99, 100 - s.movement * 1.8)));
   const lightScore = Math.round(average(lightScores));
@@ -2479,13 +2534,16 @@ function analyzePPGSignal(rawSamples, mode, fps) {
   const peakRatioScore = Math.round(Math.min(18, (peaksInWindow.length / Math.max(1, expectedPeaks)) * 18));
   const snrPrimary = Math.round(Math.min(28, spectralSnrBonus * 2.3));
   // Cross-channel coherence bonus: R+G đồng thuận tại tần số tim → signal xác nhận
+  // Face coherence ngưỡng thấp hơn finger (không có flash truyền sáng)
   const coherenceBonus = rgCoherence !== null
-    ? (rgCoherence > 0.60 ? 6 : rgCoherence > 0.40 ? 3 : rgCoherence < 0.20 ? -4 : 0)
+    ? (mode === 'face'
+      ? (rgCoherence > 0.30 ? 5 : rgCoherence > 0.15 ? 3 : rgCoherence < 0.05 ? -2 : 0)
+      : (rgCoherence > 0.60 ? 6 : rgCoherence > 0.40 ? 3 : rgCoherence < 0.20 ? -4 : 0))
     : 0;
   const signalQuality = Math.round(Math.min(95, Math.max(20,
     lightScore * 0.26 + stabilityScore * 0.26 +
     methodAgreement + snrPrimary + peakRatioScore +
-    (mode === "finger" ? 10 : 0) +
+    (mode === "finger" ? 10 : 3) +
     (rrIntervals.length >= 20 ? 4 : rrIntervals.length >= 14 ? 2 : 0) +
     coherenceBonus
   )));
@@ -2532,7 +2590,7 @@ function analyzePPGSignal(rawSamples, mode, fps) {
     && hasCardiacFrequency && methodsAgreeing >= 2 && allValid.length >= 2;
 
   // ── Quality gate — từ chối kết luận khi không đủ tin cậy ─────────────────────
-  const bpmCIFinal = estimateBpmConfidence(bpmSeries, signalQuality, bpm);
+  const bpmCIFinal = estimateBpmConfidence(bpmSeries, signalQuality, bpm, mode);
   const qualityGateResult = checkAfibQualityGate(signalQuality, rrIntervals.length, physiologicalGate, temporalScore, bpmCIFinal.ciRange);
 
   const cvCapped   = Math.min(cv, 0.52);
@@ -2980,7 +3038,7 @@ function rejectMotionWindows(samples, fps, windowSec = 2, mode = "face") {
   const movements = samples.map(s => s.movement || 0);
   const meanMov = movements.reduce((a, b) => a + b, 0) / movements.length;
   const stdMov = Math.sqrt(movements.map(m => (m - meanMov) ** 2).reduce((a, b) => a + b, 0) / movements.length);
-  const sigma = mode === "finger" ? 2.5 : 2.0;
+  const sigma = mode === "finger" ? 2.5 : 2.3;
   const threshold = meanMov + sigma * stdMov;
   const clean = [];
   for (let i = 0; i + winSize <= samples.length; i += winSize) {
@@ -7839,7 +7897,7 @@ function quickLiveBpm(samples, fps) {
   // Use last 20s — more stable FFT frequency resolution than 15s
   const last = samples.slice(-Math.floor(fps * 20));
   const mode = state.measurementMode;
-  let sig;
+  let sig, _sigIsChrom = false;
   if (mode === 'finger') {
     const rawRed   = last.map(s => s.avgRed);
     const rawGreen = last.map(s => s.avgGreen);
@@ -7847,38 +7905,53 @@ function quickLiveBpm(samples, fps) {
     const snrGreen = stdDev(butterworthBandpass(rawGreen, fps));
     sig = snrRed >= snrGreen * 0.75 ? rawRed : rawGreen;
   } else {
-    sig = last.map(s => s.avgGreen);
+    // Face: CHROM loại bỏ skin-tone bias → SNR cao hơn raw green ~30-40%
+    const _chromLive = extractChromSignal(last, fps);
+    if (_chromLive) { sig = _chromLive; _sigIsChrom = true; }
+    else { sig = last.map(s => s.avgGreen); }
   }
   const filt = butterworthBandpass(sig, fps);
-  if (stdDev(filt) < 0.15) return null;
+  if (stdDev(filt) < (_sigIsChrom ? 0.0003 : 0.15)) return null;
 
   const fftResult = fftBpm(filt, fps);
   // autocorrBpm finds FIRST peak = fundamental frequency, not highest-power peak
   // → much more resistant to sub-harmonics than FFT
   const acfResult = autocorrBpm(filt, fps);
 
+  // Inline harmonic post-check cho live display (face mode)
+  function _liveHarmonicCheck(bpm) {
+    if (mode === 'finger' || !bpm || bpm <= 78 || bpm > 180) return bpm;
+    const halfBpm = bpm / 2;
+    if (halfBpm < 40 || halfBpm > 100) return bpm;
+    const _n = filt.length;
+    const _wH = 2 * Math.PI * (halfBpm / 60) / fps;
+    const _wF = 2 * Math.PI * (bpm / 60) / fps;
+    let _rH = 0, _iH = 0, _rF = 0, _iF = 0;
+    for (let _k = 0; _k < _n; _k++) {
+      _rH += filt[_k] * Math.cos(_wH * _k); _iH -= filt[_k] * Math.sin(_wH * _k);
+      _rF += filt[_k] * Math.cos(_wF * _k); _iF -= filt[_k] * Math.sin(_wF * _k);
+    }
+    const _hP = _rH * _rH + _iH * _iH, _fP = _rF * _rF + _iF * _iF;
+    return (_fP > 0 && _hP >= _fP * 0.38) ? halfBpm : bpm;
+  }
+
   if (fftResult && acfResult) {
     const diff = Math.abs(fftResult - acfResult);
     if (diff <= 8) {
-      // Both methods agree → blend (FFT 60%, ACF 40%)
-      return Math.round(fftResult * 0.6 + acfResult * 0.4);
+      const blended = fftResult * 0.6 + acfResult * 0.4;
+      return Math.round(_liveHarmonicCheck(blended));
     }
     // Check if FFT found a sub-harmonic of the autocorr result.
-    // Common ratios when FFT picks sub-harmonic:
-    //   fft ≈ acf × 2/3  (e.g. fft=47, acf=70 → ratio 0.67)
-    //   fft ≈ acf × 1/2  (e.g. fft=40, acf=80 → ratio 0.50)
-    // When this pattern is detected, trust autocorr (fundamental) over FFT.
     if (acfResult >= 52 && acfResult <= 185) {
       const ratio = fftResult / acfResult;
       if ((ratio >= 0.60 && ratio <= 0.73) || (ratio >= 0.44 && ratio <= 0.56)) {
-        return acfResult; // FFT is a sub-harmonic, ACF has the real value
+        return Math.round(_liveHarmonicCheck(acfResult));
       }
     }
-    // No harmonic relationship found and methods strongly disagree → don't show
     return null;
   }
-  // Only one method produced a result — prefer autocorr (avoids harmonic confusion)
-  return acfResult || fftResult || null;
+  const _singleResult = acfResult || fftResult || null;
+  return _singleResult ? Math.round(_liveHarmonicCheck(_singleResult)) : null;
 }
 
 // ── Item 9: Respiratory rate from RSA band (0.13–0.45 Hz) in PPG signal ──────
@@ -8003,14 +8076,22 @@ async function runMeasurement() {
     if (state.faceROI && el.deepAnalysisPrompt) {
       el.deepAnalysisText.textContent = "✅ Đã khoá vùng trán — nhìn thẳng và giữ yên.";
     }
-    state.ppgRoiSnapInterval = setInterval(() => snapFaceROI(), 10000);
+    // Re-snap mỗi 20s (thay 10s) + shift validation: bỏ ROI mới nếu dịch đột ngột > 20px
+    // Tránh discontinuity signal khi ROI thay đổi lớn giữa phiên đo
+    state.ppgRoiSnapInterval = setInterval(async () => {
+      const prevROI = state.faceROI ? { ...state.faceROI } : null;
+      await snapFaceROI();
+      if (prevROI && state.faceROI) {
+        const dx = Math.abs(state.faceROI.fx - prevROI.fx);
+        const dy = Math.abs(state.faceROI.fy - prevROI.fy);
+        if (dx > 20 || dy > 20) state.faceROI = prevROI; // giữ ROI cũ tránh signal jump
+      }
+    }, 20000);
   }
 
   // ── Finger mode: wait for AEC to settle, then lock exposure + white balance ──
-  // Lock AEC/AWB before sampling starts.
-  // Face mode: AWB hunting creates colour shifts >> rPPG signal amplitude (0.1%).
-  // Finger mode mobile: AEC hunts when finger covers lens.
-  // Finger mode on mobile: wait for AEC to settle after finger covers lens, then lock.
+  // Face mode KHÔNG lock exposure — người dùng vẫn thấy preview, lock sẽ làm màn
+  // hình tối/xanh. CHROM/slidingChrom đã xử lý AEC drift bằng toán học (normalize mean).
   if (state.measurementMode === "finger" && isMobile()) {
     await new Promise(r => setTimeout(r, 700));
     const expLocked = await lockCameraExposure();
@@ -8150,13 +8231,21 @@ async function runMeasurement() {
   console.log('[HeartSense AI] samples:', state.measurementSamples.length);
   if (state.measurementSamples.length >= 32) {
     try {
-      const features = _buildServerFeatures(state.measurementSamples);
       const fps = computeActualFps(state.measurementSamples) || state.measurementFps || 30;
+      // Loại bỏ warmup frames (4s đầu AEC hunting) trước khi gửi lên server
+      // analyzePPGSignal cũng làm vậy ở local — cần nhất quán để model thấy signal sạch
+      const _wFrames = Math.floor(fps * 4);
+      const _sampServer = state.measurementSamples.length > _wFrames + 32
+        ? state.measurementSamples.slice(_wFrames) : state.measurementSamples;
+      const features = _buildServerFeatures(_sampServer);
       const payload = { features, mode: state.measurementMode, fps };
 
-      // Face mode: attach 18×18 crops for rppg_lite (Conv3D)
+      // Face mode: attach 18×18 crops cho rppg_lite (Conv3D) — cũng skip warmup frames
       if (state.measurementMode === 'face' && state.mlFaceFrameBuffer.length >= 20) {
-        const cropData = _buildFaceCropsForServer(state.mlFaceFrameBuffer);
+        const _wCrops = Math.floor(fps * 4);
+        const _cropsServer = state.mlFaceFrameBuffer.length > _wCrops + 20
+          ? state.mlFaceFrameBuffer.slice(_wCrops) : state.mlFaceFrameBuffer;
+        const cropData = _buildFaceCropsForServer(_cropsServer);
         if (cropData) { payload.crops_b64 = cropData.b64; payload.crops_shape = cropData.shape; }
       }
 
